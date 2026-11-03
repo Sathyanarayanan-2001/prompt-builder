@@ -2,6 +2,16 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.1] - 2026-11-03
+
+### Fixed
+- Restoring a backup after deleting items said "Nothing new in that backup": deletions are newer than the backup, so they won. Restore now shows what it will add, update or bring back, and offers to bring back items deleted on this device (on by default). Deletions inside a backup are ignored, so restore never deletes.
+- Sections you open on Build stay open after the page redraws (for example after Save version).
+- The quality Fix button no longer opens an empty "Previous" list and takes focus from the field.
+
+### Added
+- Browser tests that click every action in the app, and the delete-then-restore case.
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

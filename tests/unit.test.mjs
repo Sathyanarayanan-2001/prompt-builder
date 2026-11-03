@@ -211,3 +211,23 @@ test('model keeps lessons and feedback through merge and sanitize', () => {
   assert.ok(m.lessons.l1 && m.feedback.f1);
   assert.ok(Model.sanitize(JSON.parse(JSON.stringify(m))).lessons.l1);
 });
+
+test('restore plan: adds, updates, keeps newer local, ignores backup deletions, offers to bring back local deletions', () => {
+  const L = Model.empty(), B = Model.empty();
+  B.builds.a = { id: 'a', u: 10, t: 'A' };   // deleted here later -> revive
+  B.builds.b = { id: 'b', u: 10, t: 'B' };   // changed here later -> keep local
+  B.builds.c = { id: 'c', u: 10, t: 'C' };   // missing here -> add
+  B.builds.d = { id: 'd', u: 9, d: 1 };      // deletion in backup, live here -> ignore
+  B.builds.e = { id: 'e', u: 12, t: 'E2' };  // newer in backup -> update
+  B.builds.f = { id: 'f', u: 4, t: 'F' };    // identical -> same
+  L.builds.a = { id: 'a', u: 20, d: 1 }; L.builds.b = { id: 'b', u: 30, t: 'B2' }; L.builds.d = { id: 'd', u: 3, t: 'D' };
+  L.builds.e = { id: 'e', u: 11, t: 'E1' }; L.builds.f = { id: 'f', u: 4, t: 'F' };
+  const plan = Model.restorePlan(L, B);
+  assert.deepEqual(plan, { add: [['builds', 'c']], update: [['builds', 'e']], revive: [['builds', 'a']], ignoredDeletions: 1, keptNewer: 1, same: 1 });
+  let k = 100;
+  const without = Model.applyRestore(L, B, plan, false, () => ++k).builds;
+  assert.equal(without.a.d, 1); assert.equal(without.c.t, 'C'); assert.equal(without.e.t, 'E2'); assert.equal(without.b.t, 'B2'); assert.equal(without.d.t, 'D');
+  const withRevive = Model.applyRestore(L, B, plan, true, () => ++k).builds;
+  assert.deepEqual(withRevive.a, { id: 'a', u: 101, t: 'A' }); // fresh u beats the tombstone on other devices too
+  assert.equal(L.builds.c, undefined, 'local data is not mutated');
+});

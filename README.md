@@ -17,7 +17,7 @@ Prompt Builder is a static web app. You describe what you need field by field; i
 - **Every entry remembered:** each field has a Previous button with your earlier entries (pin the best ones) and suggestions. Profiles fill the PROFILE block.
 - **Version history:** every save is a new version; view, compare line by line, load old inputs. Nothing is overwritten.
 - **Learns from feedback:** on the Feedback tab, paste the AI's answer or describe what went wrong. Prompt Builder recognises 17 common problems (questions instead of work, placeholders, invented links, untested claims, ignored format, outdated versions, regressions and more) and proposes a lesson. A lesson either adds a step to future prompts, in a "Lessons from earlier answers" section, or warns you while you build a similar prompt. Repeated problems are counted, not duplicated.
-- **Your data:** backup and restore (merges, never deletes), Excel export (library, versions, saved inputs, lessons, feedback) and CSV, sample data you can remove in one tap.
+- **Your data:** backup and restore (shows what will change, never deletes, can bring back what you deleted), Excel export (library, versions, saved inputs, lessons, feedback) and CSV, sample data you can remove in one tap.
 - **Sync through OneDrive:** each device writes its own save file to a folder you choose and merges the others record by record; deletions travel too.
 - **Installs and works offline;** light and dark themes; phone layout with bottom tabs.
 

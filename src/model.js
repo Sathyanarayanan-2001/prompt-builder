@@ -73,6 +73,31 @@ const Model = (() => {
     return sanitize(obj.data);
   }
 
-  return { COLLECTIONS, APP, V, empty, canon, pick, merge, sanitize, nextU, seedU, live, rid, hash, memId, backupBlob, readBackup };
+  // Restore is not sync: it adds and updates, never deletes, and can bring back
+  // records deleted on this device (their tombstones are newer than the backup).
+  function restorePlan(local, inc) {
+    const plan = { add: [], update: [], revive: [], ignoredDeletions: 0, keptNewer: 0, same: 0 };
+    for (const c of COLLECTIONS) {
+      for (const [id, r] of Object.entries((inc && inc[c]) || {})) {
+        const L = local && local[c] && local[c][id];
+        if (r.d) { if (L && !L.d) plan.ignoredDeletions++; continue; }
+        if (!L) plan.add.push([c, id]);
+        else if (L.d) plan.revive.push([c, id]);
+        else if (canon(L) === canon(r)) plan.same++;
+        else if (r.u > L.u) plan.update.push([c, id]);
+        else plan.keptNewer++;
+      }
+    }
+    return plan;
+  }
+  function applyRestore(local, inc, plan, revive, stamp) {
+    const data = empty();
+    for (const c of COLLECTIONS) data[c] = { ...((local && local[c]) || {}) };
+    for (const [c, id] of plan.add.concat(plan.update)) data[c][id] = inc[c][id];
+    if (revive) for (const [c, id] of plan.revive) data[c][id] = { ...inc[c][id], u: stamp() };
+    return data;
+  }
+
+  return { restorePlan, applyRestore, COLLECTIONS, APP, V, empty, canon, pick, merge, sanitize, nextU, seedU, live, rid, hash, memId, backupBlob, readBackup };
 })();
 if (typeof module !== 'undefined') module.exports = Model;

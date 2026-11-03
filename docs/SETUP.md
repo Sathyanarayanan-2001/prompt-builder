@@ -24,7 +24,7 @@ iPhone, Firefox and Safari cannot open folders; use **Download backup** and **Re
 
 ## Bringing your prompts in
 
-In **Setup**, press **Restore from backup** and pick `Prompt_Builder_Enhanced_Prompts.json`. Your four stored prompts arrive with two versions each: v1 is the original text, v2 the enhanced prompt. Open one and use **Versions → Compare with now** to see what changed.
+In **Setup**, press **Restore from backup** and pick `Prompt_Builder_Enhanced_Prompts.json`. A dialog shows what will be added or updated; if you deleted any of those items earlier, tick **Bring back** to restore them too. Your four stored prompts arrive with two versions each: v1 is the original text, v2 the enhanced prompt. Open one and use **Versions → Compare with now** to see what changed.
 
 ## Teaching it from AI answers
 
