@@ -4,7 +4,7 @@
    record becomes a tombstone {id, d:1, u} so the deletion reaches other devices. */
 'use strict';
 const Model = (() => {
-  const COLLECTIONS = ['builds', 'versions', 'memory', 'profiles', 'cfg'];
+  const COLLECTIONS = ['builds', 'versions', 'memory', 'profiles', 'cfg', 'lessons', 'feedback'];
   const APP = 'prompt-builder';
   const V = 1;
 

@@ -16,8 +16,8 @@ Prompt Builder is a static web app. You describe what you need field by field; i
 - **Quality score:** eleven weighted checks from the prompting guide, a vague-word penalty, and a Fix button that takes you to the right field.
 - **Every entry remembered:** each field has a Previous button with your earlier entries (pin the best ones) and suggestions. Profiles fill the PROFILE block.
 - **Version history:** every save is a new version; view, compare line by line, load old inputs. Nothing is overwritten.
-- **Prompt Manager interop:** import `Prompting.zip` or the `prompt_repository` folder; export any prompt as `prompt_repository/<title>/prompt.txt`, `thinking.txt` and `metadata.json`, exactly what the desktop Prompt Manager reads.
-- **Your data:** backup and restore (merges, never deletes), Excel and CSV export, sample data you can remove in one tap.
+- **Learns from feedback:** on the Feedback tab, paste the AI's answer or describe what went wrong. Prompt Builder recognises 17 common problems (questions instead of work, placeholders, invented links, untested claims, ignored format, outdated versions, regressions and more) and proposes a lesson. A lesson either adds a step to future prompts, in a "Lessons from earlier answers" section, or warns you while you build a similar prompt. Repeated problems are counted, not duplicated.
+- **Your data:** backup and restore (merges, never deletes), Excel export (library, versions, saved inputs, lessons, feedback) and CSV, sample data you can remove in one tap.
 - **Sync through OneDrive:** each device writes its own save file to a folder you choose and merges the others record by record; deletions travel too.
 - **Installs and works offline;** light and dark themes; phone layout with bottom tabs.
 
@@ -27,7 +27,7 @@ There is no server, account, analytics or outside request. Your prompts live in 
 
 ## Getting started
 
-See [docs/SETUP.md](docs/SETUP.md) for laptops, the Android phone and moving your Prompt Manager library across.
+See [docs/SETUP.md](docs/SETUP.md) for laptops and the Android phone.
 
 ## Development
 
@@ -38,7 +38,7 @@ npm ci
 npx playwright install chromium
 npm start          # builds dist/ and serves http://localhost:8124
 npm test           # round 1 unit tests, then round 2 browser tests
-python tests/check_exports.py path/to/prompt_manager.py path/to/Prompting.zip   # independent check after npm test
+python tests/check_exports.py   # independent check of the Excel, CSV and backup files, after npm test
 ```
 
 `npm run build` inlines the font, CSS and JavaScript into one `dist/index.html`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
