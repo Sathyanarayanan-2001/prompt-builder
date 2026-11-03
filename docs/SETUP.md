@@ -22,9 +22,13 @@
 
 iPhone, Firefox and Safari cannot open folders; use **Download backup** and **Restore from backup** instead.
 
-## Moving your Prompt Manager library across
+## Bringing your prompts in
 
-In **Library**, press **Import from Prompt Manager** and choose `Prompting.zip` or the `prompt_repository` folder. The preview shows each prompt as New, New version or Already stored; nothing is saved until you press **Import**. To go back the other way, press **Export all to Prompt Manager** and unzip the result next to `prompt_manager.py`.
+In **Setup**, press **Restore from backup** and pick `Prompt_Builder_Enhanced_Prompts.json`. Your four stored prompts arrive with two versions each: v1 is the original text, v2 the enhanced prompt. Open one and use **Versions → Compare with now** to see what changed.
+
+## Teaching it from AI answers
+
+After you use a prompt, open **Build → Feedback**, choose the version, mark the result, paste the answer or describe the issues, and press **Find lessons**. Keep the lessons you agree with. Manage them under **Saved inputs → Lessons learned** (pause, switch between step and warning, narrow when they apply).
 
 ## Check it works (your devices)
 
@@ -34,4 +38,4 @@ In **Library**, press **Import from Prompt Manager** and choose `Prompting.zip` 
 | Reuse | Save a version, start a new prompt, press Previous on Role | The earlier role is listed |
 | Two devices | Save a prompt on each, wait for OneDrive, switch back to each tab | Both prompts on both; a deletion on one reaches the other |
 | Offline | Open once, switch on airplane mode, reopen | The app opens with your prompts |
-| Prompt Manager | Export all, unzip next to prompt_manager.py, run it | Every prompt, thinking and tag set appears unchanged |
+| Lessons | Record feedback "it asked me questions", then start a new prompt of the same kind | The prompt has a Lessons from earlier answers section |

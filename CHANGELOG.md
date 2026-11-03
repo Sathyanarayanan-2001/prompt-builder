@@ -2,6 +2,20 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.0] - 2026-11-03
+
+### Added
+- Feedback tab: record how an AI answer went; 17 problem patterns turn it into lessons.
+- Lessons apply as a step in future prompts or as a warning; manage them in Saved inputs.
+- Excel export gains Lessons and Feedback sheets.
+
+### Changed
+- Smart packs trigger more precisely (for example "Excel sync" no longer adds multi-device rules).
+- GitHub Actions moved to Node 24 versions: checkout v6, setup-node v6, upload-pages-artifact v5, deploy-pages v5.
+
+### Removed
+- Prompt Manager import and export.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added

@@ -148,30 +148,14 @@ test('thinking piles count decided fields', () => {
 test('crc32 standard check value', () => {
   assert.equal(Files.crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
 });
-test('zip write then list/read round trip (stored)', async () => {
-  const z = Files.zip([{ name: 'a/b.txt', data: 'héllo' }, { name: 'c.bin', data: new Uint8Array([0, 1, 2]) }]);
-  const l = Files.zipList(z);
-  assert.deepEqual(l.map(e => [e.name, e.usize]), [['a/b.txt', 6], ['c.bin', 3]]);
-  assert.equal(new TextDecoder().decode(await Files.zipRead(z, l[0])), 'héllo');
-});
-test('reads a deflated zip written by Python and finds Prompt Manager folders', async () => {
-  const u8 = new Uint8Array(readFileSync(new URL('./fixtures/pm_sample.zip', import.meta.url)));
-  const l = Files.zipList(u8);
-  const g = Files.pmGroups(l.map(e => e.name));
-  assert.deepEqual(g.map(x => x.title), ['Alpha tool', 'Beta']);
-  const byName = new Map(l.map(e => [e.name, e]));
-  const txt = new TextDecoder().decode(await Files.zipRead(u8, byName.get(g[0].prompt)));
-  assert.equal(txt, 'Act as a tester.\nLine two\n'.repeat(20));
-  assert.deepEqual(Files.parseMeta(new TextDecoder().decode(await Files.zipRead(u8, byName.get(g[0].meta)))), ['a', 'b']);
-  assert.equal(g[1].prompt.endsWith('prompt.md'), true);
-});
-test('Prompt Manager export: safe, unique folder names and metadata', () => {
-  const e = Files.pmEntries([{ title: 'A/B: c?', prompt: 'p', thinking: 't', tags: ['x'] }, { title: 'a/b: C?', prompt: 'q' }, { title: '_hidden', prompt: 'r' }]);
-  assert.deepEqual(e.map(x => x.name), [
-    'prompt_repository/A_B_ c_/prompt.txt', 'prompt_repository/A_B_ c_/thinking.txt', 'prompt_repository/A_B_ c_/metadata.json',
-    'prompt_repository/a_b_ C_ (2)/prompt.txt', 'prompt_repository/a_b_ C_ (2)/thinking.txt', 'prompt_repository/a_b_ C_ (2)/metadata.json',
-    'prompt_repository/Prompt _hidden/prompt.txt', 'prompt_repository/Prompt _hidden/thinking.txt', 'prompt_repository/Prompt _hidden/metadata.json']);
-  assert.equal(e[2].data, '{\n  "tags": [\n    "x"\n  ]\n}\n');
+test('zip writer: local headers, sizes and CRC at the right offsets', () => {
+  const z = Files.zip([{ name: 'a.txt', data: 'abc' }]);
+  const dv = new DataView(z.buffer);
+  assert.equal(dv.getUint32(0, true), 0x04034b50);
+  assert.equal(dv.getUint32(14, true), 0x352441c2); // crc32("abc"), standard value
+  assert.equal(dv.getUint32(18, true), 3); assert.equal(dv.getUint32(22, true), 3);
+  assert.equal(dv.getUint32(z.length - 22, true), 0x06054b50);
+  assert.equal(dv.getUint16(z.length - 22 + 10, true), 1);
 });
 test('CSV: byte order mark, quoting, CRLF', () => {
   assert.equal(Files.csv([['a', 'b,c', 'say "hi"', 'x\ny', 12]]), '﻿a,"b,c","say ""hi""","x\ny",12\r\n');
@@ -182,4 +166,48 @@ test('score is held at 30 and marked Incomplete until required fields are filled
   assert.equal(r.score.grade, 'Incomplete'); assert.ok(r.score.total <= 30);
   const full = Engine.build({ type: 'app', inputs: { title: 'T', goal: 'Build a thing that works offline on my phone.' } });
   assert.notEqual(full.score.grade, 'Incomplete');
+});
+
+// ---------- feedback and lessons
+test('diagnose: issue text and answer text each find problems', () => {
+  const d = Engine.diagnose({ issues: 'It asked me too many questions and two links were broken.', response: 'Sure\n// ... rest of code\n' });
+  assert.deepEqual(d.map(x => x.pattern), ['questions', 'incomplete', 'links']);
+  assert.match(d.find(x => x.pattern === 'incomplete').evidence, /"\/\/ \.\.\." in the answer/);
+  const q = Engine.diagnose({ response: 'Which year?\nWhich language?\nHow many?\nThanks' });
+  assert.deepEqual(q.map(x => x.pattern), ['questions']);
+  assert.equal(q[0].evidence, '3 questions near the start of the answer');
+});
+test('diagnose: unknown issue becomes a custom lesson; nothing in, nothing out', () => {
+  const c = Engine.diagnose({ issues: 'The colours were purple.' });
+  assert.equal(c.length, 1); assert.equal(c[0].pattern, 'custom');
+  assert.equal(c[0].line, 'Avoid this problem from an earlier answer: The colours were purple.');
+  assert.deepEqual(Engine.diagnose({ issues: '', response: 'All good, here is your table.' }), []);
+});
+test('lessons: scope by kind, everywhere or by words; step vs warning; paused ignored', () => {
+  const L = [
+    { id: 'a', title: 'No questions', mode: 'step', scope: 'all', line: 'Do not reply with questions.', seen: 2, issue: 'asked questions' },
+    { id: 'b', title: 'Links', mode: 'warn', scope: 'type', types: ['research'], warning: 'Check links', line: 'Open every link.' },
+    { id: 'c', title: 'Tamil', mode: 'step', scope: 'keywords', keywords: ['ocr'], line: 'Test with Tamil.' },
+    { id: 'd', title: 'Paused', mode: 'step', scope: 'all', line: 'Never shown.', active: false },
+  ];
+  const app = Engine.build({ type: 'app', inputs: { title: 'X', goal: 'Scan receipts with OCR.' }, lessons: L });
+  assert.match(app.prompt, /LESSONS FROM EARLIER ANSWERS \(avoid these\)\n- Do not reply with questions\.\n- Test with Tamil\.\n\n\d+\. FINAL ANSWER/);
+  assert.doesNotMatch(app.prompt, /Never shown/);
+  assert.deepEqual(app.warnings, []);
+  const res = Engine.build({ type: 'research', inputs: { topic: 'Y' }, lessons: L });
+  assert.deepEqual(res.warnings.map(w => w.id), ['b']);
+  assert.doesNotMatch(res.prompt, /Test with Tamil/);
+  const off = Engine.build({ type: 'app', inputs: { title: 'X', goal: 'G' }, lessons: L, options: { off: { L_a: true } } });
+  assert.doesNotMatch(off.prompt, /Do not reply with questions/);
+  const rev = Engine.build({ type: 'review', inputs: { title: 'R', prompt: 'Hi' }, lessons: L });
+  assert.equal(rev.prompt, 'Hi'); // review prompts are never rewritten; lessons show as warnings
+  assert.deepEqual(rev.warnings.map(w => w.id).sort(), ['a']);
+  const th = app.thinking.additions.find(x => x.id === 'L_a');
+  assert.match(th.why, /reported 2 times/);
+});
+test('model keeps lessons and feedback through merge and sanitize', () => {
+  const a = Model.empty(); a.lessons.l1 = { id: 'l1', u: 5, title: 'x' }; a.feedback.f1 = { id: 'f1', u: 6 };
+  const m = Model.merge(Model.empty(), a).data;
+  assert.ok(m.lessons.l1 && m.feedback.f1);
+  assert.ok(Model.sanitize(JSON.parse(JSON.stringify(m))).lessons.l1);
 });

@@ -1,41 +1,18 @@
 """Independent check (a different method from the app's own code):
-1. Load the exported Prompt Manager zip with the real prompt_manager.py loader and
-   compare every prompt, thinking and tag set with the original repository.
-2. Open the Excel export with openpyxl and the CSV with Python's csv module."""
-import csv, io, json, sys, types, zipfile, tempfile, pathlib, importlib.util
+open the Excel export with openpyxl, the CSV with Python's csv module and the backup as JSON.
+Run after `npm test`: python tests/check_exports.py"""
+import csv, io, json, pathlib
 
 out = pathlib.Path(__file__).parent / "output"
-pm_src, original_zip = sys.argv[1], sys.argv[2]
 checks = 0
-
-# stub tkinter so prompt_manager.py imports headlessly; only its file logic is used
-for name in ("tkinter", "tkinter.ttk", "tkinter.messagebox"):
-    m = types.ModuleType(name); sys.modules[name] = m
-sys.modules["tkinter"].ttk = sys.modules["tkinter.ttk"]; sys.modules["tkinter"].messagebox = sys.modules["tkinter.messagebox"]
-spec = importlib.util.spec_from_file_location("prompt_manager", pm_src)
-pm = importlib.util.module_from_spec(spec); spec.loader.exec_module(pm)
-G = pm.AdvancedPromptManagerGUI
-
-export = pathlib.Path((out / "pm-export-path.txt").read_text())
-with tempfile.TemporaryDirectory() as tmp:
-    zipfile.ZipFile(export).extractall(tmp)
-    repo = pathlib.Path(tmp) / "prompt_repository"
-    fake = types.SimpleNamespace(repo_path=str(repo), _find_file=G._find_file, _read_text=G._read_text)
-    loaded = {n.name: G._load_record(fake, n.name) for n in repo.iterdir() if n.is_dir()}
-    with zipfile.ZipFile(original_zip) as z:
-        for title, rec in sorted(loaded.items()):
-            base = f"Prompting/prompt_repository/{title}/"
-            assert rec is not None, title
-            assert rec.body == z.read(base + "prompt.txt").decode("utf-8"), f"prompt differs: {title}"
-            assert rec.thinking == z.read(base + "thinking.txt").decode("utf-8"), f"thinking differs: {title}"
-            assert rec.tags == json.loads(z.read(base + "metadata.json"))["tags"], f"tags differ: {title}"
-            checks += 3
-    print(f"Prompt Manager loader read {len(loaded)} prompts; prompt, thinking and tags identical to the original ({checks} checks)")
 
 ex = json.loads((out / "exports.json").read_text())
 from openpyxl import load_workbook
 wb = load_workbook(ex["xlsx"])
-assert wb.sheetnames == ["Library", "Versions", "Saved inputs"], wb.sheetnames
+assert wb.sheetnames == ["Library", "Versions", "Saved inputs", "Lessons", "Feedback"], wb.sheetnames
+les = list(wb["Lessons"].iter_rows(values_only=True))
+assert les[1][0] == "Test lesson" and les[1][1] == "Adds a step" and les[1][5] == "Step text", les[1]
+checks += 1
 lib = list(wb["Library"].iter_rows(values_only=True))
 assert lib[0][:3] == ("Title", "Kind", "Tags") and len(lib) - 1 == ex["builds"], len(lib)
 ver = list(wb["Versions"].iter_rows(values_only=True))

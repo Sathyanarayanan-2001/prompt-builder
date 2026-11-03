@@ -130,13 +130,13 @@ const Engine = (() => {
       add: { rules: [d => `Financial year runs 1 April to 31 March, labelled ${fyLabel(d)}. Weeks are ISO calendar weeks, Monday to Sunday, labelled CW${isoWeek(d)}. Month, week and financial year are derived from the date, never typed in.`, 'Typed dates are day first (28/10); times are 24-hour on screen.'],
         tests: ['ISO week 53 and the financial-year boundary (31 March to 1 April) land in the right period.'] } },
     { id: 'sync', name: 'Multi-device merge', types: ['app', 'extend'],
-      re: /\b(sync|syncing|synced|onedrive|google drive|dropbox|several devices|multiple devices|two laptops|other devices|across devices)\b/i,
+      re: /\b(onedrive|google drive|dropbox|several devices|multiple devices|two laptops|other devices|across devices|between devices|sync(ing|ed)? (between|across) (devices|laptops)|laptops? and (an? )?(android )?phone)\b/i,
       why: 'You need several devices to agree. Without exact merge rules an AI writes "last file wins", which silently loses entries.',
       add: { sync: ['Merge per record: the newer update time u wins; on an exact tie the larger canonical JSON text (keys sorted) wins, so every device settles the same way.', 'A deletion becomes a tombstone {d:1, u} so it reaches the other devices.', 'Write about 3 seconds after a change and when the page is hidden; never rely on writing at tab close.', 'Skip a save file that cannot be read yet (sync apps deliver files late) and retry next time; it must not stop sync.', 'Show the sync state at all times: saved, saving, changes waiting, folder access needed, sync problem.'],
         tests: ['Two simulated devices add entries at the same time; both end with both entries, and a deletion on one reaches the other.', 'merge() is commutative, associative and idempotent on randomised data.'],
         pitfalls: ['Compare records by canonical JSON, not raw JSON text, because key order differs.', 'A pull must wait for a write that is still running.'] } },
     { id: 'offline', name: 'Offline web app', types: ['app'],
-      re: /\b(offline|install(?:able|s)?|pwa|github pages|static (?:site|page|web)|no server|serverless)\b/i,
+      re: /\b(offline|installable|installs? as an app|pwa|github pages|static (?:site|page|web)|no server|serverless)\b/i,
       why: 'It must work offline from a static host, which decides caching, install files and storage before any screen is drawn.',
       add: { offline: ['Service worker: network first for the page, cached copy when offline. Register only on http or https.', 'Web manifest with 192 px, 512 px and maskable icons so it installs as an app.', 'A Content-Security-Policy meta tag so the page loads only its own files.'],
         pitfalls: ['Use a unique localStorage key prefix and cache-name prefix, because every project on one github.io account shares a browser origin.'],
@@ -152,12 +152,12 @@ const Engine = (() => {
       add: { rules: ['CSV uses UTF-8 with a byte order mark and quotes fields that need it.', 'Import finds the header row after any preamble lines, matches columns by name with aliases, shows a preview with a status per row, and saves nothing until I press Import.'],
         tests: ['Round trip: export everything, import into an empty copy, and the counts and totals match.'] } },
     { id: 'charts', name: 'Readable charts', types: ['app'],
-      re: /\b(charts?|graphs?|dashboards?|visuali[sz]ations?|plots?)\b/i,
+      re: /\b(charts?|graphs?|visuali[sz]ations?|plots?)\b(?!\s*motif)/i,
       why: 'Charts hide exact numbers. A table toggle keeps every figure checkable.',
       add: { design: ['Every chart has a Chart and Table toggle so the numbers are always readable as text. Colour follows the category, never its rank; one axis; recessive grid.'],
         tests: ['Every dashboard figure is checked against a number computed separately.'] } },
     { id: 'github', name: 'GitHub hygiene', types: ['app', 'extend'],
-      re: /\b(github|repo|repository|ci|pages)\b/i,
+      re: /\b(github|git repo(sitory)?|github actions|ci\/cd)\b/i,
       why: 'It ships as a repository. A named file list stops the AI from delivering code without docs, tests or CI.',
       add: { repo: ['README (live link, screenshot, features, privacy, getting started), CHANGELOG, CONTRIBUTING, SECURITY, MIT LICENSE, docs/SETUP.md, docs/ARCHITECTURE.md, .gitignore, .editorconfig.', 'GitHub Actions: test on every push and pull request; deploy to Pages from main with read-only default permissions.', 'Pin dependency versions and commit the lock file.'],
         delivery: ['If you cannot push to the repository, hand back a zip with upload steps, and tell me to set Settings, Pages, Source to GitHub Actions.'] } },
@@ -175,7 +175,7 @@ const Engine = (() => {
       why: 'It talks to the network, which fails, slows and rate-limits.',
       add: { pitfalls: ['Wrap every network call with a timeout and retry with backoff; a failed call must not freeze or crash the tool.'] } },
     { id: 'time', name: 'Time tracking', types: ['app', 'extend'],
-      re: /\b(time ?track\w*|hours|minutes|timers?|pomodoro|timesheets?|log time|time logs?)\b/i,
+      re: /\b(time ?track\w*|timers?|pomodoro|timesheets?|log time|time logs?|hours and minutes|minutes logged)\b/i,
       why: 'Time entries overlap and cross midnight; both need a rule or totals double-count.',
       add: { rules: ['An entry that crosses midnight splits into one entry per day.', 'Overlaps are detected before saving; nothing is overwritten silently.'],
         tests: ['A 5-minute break inside a 2-hour task leaves 115 minutes.'] } },
@@ -273,8 +273,10 @@ const Engine = (() => {
     const style = STYLES[opts.style] ? opts.style : 'plain';
     const now = input.now ? new Date(input.now) : new Date();
     const profile = T[type].profile && opts.useProfile !== false ? input.profile : null;
-    const packs = firedPacks(inp, type, profile, opts.off);
+    const L = applyLessons(input.lessons, inp, type, profile, opts.off);
+    const packs = firedPacks(inp, type, profile, opts.off).concat(L.packs);
     const live = packs.filter(p => !p.off);
+    const warnings = L.warnings;
     const mode = UNCLEAR[inp.unclear] ? inp.unclear : (opts.defaultUnclear || 'decide');
     const S = [];
     let role = has(inp.role) ? inp.role.trim().replace(/\.$/, '') : '';
@@ -285,7 +287,7 @@ const Engine = (() => {
 
     if (type === 'review') {
       const prompt = str(inp.prompt).replace(/\s+$/, '');
-      return finish({ type, prompt, sections: [], packs: [], inp, mode, profile, style, now, title });
+      return finish({ type, prompt, sections: [], packs: [], inp, mode, profile, style, now, title, warnings: L.warnings.concat(L.packs.map(p => ({ id: p.lessonId, title: p.lessonTitle, warning: p.add.lessons[0], asStep: true }))) });
     }
 
     if (type === 'app') {
@@ -370,8 +372,15 @@ const Engine = (() => {
       S.push({ title: 'Ending', text: inp.cta });
       S.push({ title: 'Also', lines: lines(inp.extra) });
     }
+    const lessonLines = collect({}, 'lessons', live, now);
+    if (lessonLines.length) {
+      let at = S.findIndex(x => x.title === 'Final answer');
+      if (at < 0) at = S.findIndex(x => x.title === 'Also');
+      if (at < 0) at = S.length;
+      S.splice(at, 0, { title: 'Lessons from earlier answers (avoid these)', lines: lessonLines });
+    }
     const prompt = render(style, S);
-    return finish({ type, prompt, sections: S, packs, inp, mode, profile, style, now, title });
+    return finish({ type, prompt, sections: S, packs, inp, mode, profile, style, now, title, warnings });
   }
 
   // ---------------------------------------------------------------- quality
@@ -416,7 +425,7 @@ const Engine = (() => {
     const found = [];
     const low = ' ' + str(text).toLowerCase() + ' ';
     for (const w of VAGUE) {
-      const re = new RegExp('(^|[^a-z-])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[^a-z-]|$)', 'g');
+      const re = new RegExp('(^|[^a-z-])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w === 'clean' ? '(?! ?up)' : '') + '(?=[^a-z-]|$)', 'g');
       const n = (low.match(re) || []).length;
       if (n) found.push({ word: w, n });
     }
@@ -555,6 +564,7 @@ const Engine = (() => {
         : /example/.test(tl) ? 'Examples show the exact behaviour you expect (guide tip 2).'
         : /rule|constraint|assumption/.test(tl) ? 'Decisions, not wishes: each line removes a question the AI would otherwise ask or guess.'
         : /verif|citation|test/.test(tl) ? 'Ask for checks and citations to minimise hallucination.'
+        : /lessons from earlier/.test(tl) ? 'Mistakes from earlier AI answers, recorded through your feedback, so they are not repeated.'
         : /pitfall/.test(tl) ? 'Known mistakes listed up front save a debugging round.'
         : /order|structure|what i need/.test(tl) ? 'Breaking the task into ordered steps (guide tip 3).'
         : /final|deliver|output|format|length|ending/.test(tl) ? 'A defined output structure (guide: define output structure).'
@@ -603,7 +613,127 @@ const Engine = (() => {
     const th = thinkingFor(ctx);
     const missingRequired = T[ctx.type].required.filter(k => !has(ctx.inp[k])).map(k => F[k].label);
     if (missingRequired.length) { sc.total = Math.min(sc.total, 30); sc.grade = 'Incomplete'; sc.capped = true; }
-    return { type: ctx.type, prompt: ctx.prompt, score: sc, thinking: th, thinkingText: thinkingText(th, ctx.title, ctx.type === 'review' ? ctx.inp.thinking : ''), missingRequired, packs: ctx.packs };
+    return { type: ctx.type, prompt: ctx.prompt, score: sc, thinking: th, thinkingText: thinkingText(th, ctx.title, ctx.type === 'review' ? ctx.inp.thinking : ''), missingRequired, packs: ctx.packs, warnings: ctx.warnings || [] };
+  }
+
+  // ---------------------------------------------------------------- lessons from feedback
+  function lessonApplies(l, inp, type, profile) {
+    if (!l || l.d || l.active === false) return false;
+    if (l.scope === 'type' && !(l.types || []).includes(type)) return false;
+    if (l.scope === 'keywords') {
+      const kws = (l.keywords || []).map(k => String(k).trim().toLowerCase()).filter(Boolean);
+      if (!kws.length) return false;
+      const text = userText(inp, type, profile).toLowerCase();
+      if (!kws.some(k => text.includes(k))) return false;
+    }
+    return true;
+  }
+  function applyLessons(lessons, inp, type, profile, off) {
+    const packs = [], warnings = [];
+    for (const l of (lessons || [])) {
+      if (!lessonApplies(l, inp, type, profile)) continue;
+      const seen = l.seen > 1 ? ` (reported ${l.seen} times)` : '';
+      if (l.mode === 'step' && has(l.line)) {
+        packs.push({ id: 'L_' + l.id, lessonId: l.id, lessonTitle: l.title, name: 'Lesson: ' + l.title, types: [type], always: true, lesson: true,
+          why: `From your feedback${seen}: ${has(l.issue) ? '"' + firstSentence(l.issue).replace(/^"|"$/g, '') + '"' : l.title}.`, add: { lessons: [l.line.trim()] }, off: !!(off || {})['L_' + l.id], matched: null });
+      } else if (has(l.warning) || has(l.line)) {
+        warnings.push({ id: l.id, title: l.title, warning: has(l.warning) ? l.warning : l.line, line: l.line, seen: l.seen || 1 });
+      }
+    }
+    return { packs, warnings };
+  }
+
+  // Each pattern reads your description of what went wrong (issue) and the AI's answer (response).
+  const ISSUES = [
+    { id: 'questions', name: 'Asked questions instead of working',
+      issue: /\b(asked (me )?(too many |a lot of |lots of )?questions|kept asking|clarifying questions|asked for clarification|wouldn't start|did not start)\b/i,
+      resp: r => { const q = r.split(/\n/).map(x => x.trim()).filter(Boolean).slice(0, 20).filter(x => /\?\s*$/.test(x)).length; return q >= 3 ? `${q} questions near the start of the answer` : ''; },
+      line: 'Do not reply with questions. Make each decision yourself, do the work, and list your assumptions at the end.',
+      warn: 'An earlier answer asked questions instead of working. Say whether the AI may ask, and decide the open points in the prompt.' },
+    { id: 'incomplete', name: 'Incomplete or placeholder output',
+      issue: /\b(incomplete|truncated|cut off|stopped (half ?way|midway|early)|partial (code|answer)|placeholders?|todo|left out|omitted|rest of the code|not complete|unfinished)\b/i,
+      resp: r => { const m = r.match(/(\/\/|#)\s*\.\.\.|\.\.\.\s*(rest|remaining|existing)|\bTODO\b|rest of (the )?(code|file)|remains? (the same|unchanged)|\[insert[^\]]*\]|lorem ipsum/i); if (m) return `"${m[0]}" in the answer`; return (r.match(/```/g) || []).length % 2 ? 'the answer ends inside a code block' : ''; },
+      line: 'Deliver complete files and complete answers. Never use placeholders such as "...", TODO or "rest unchanged". If the output is too long, split it into numbered parts and stop at a clean boundary, saying which part comes next.',
+      warn: 'An earlier answer came back incomplete or with placeholders. Ask for complete files, split into parts if long.' },
+    { id: 'links', name: 'Broken or invented links and facts',
+      issue: /\blinks? (were|was|are|is) (broken|dead|fake|wrong|invalid)\b|\b(broken links?|fake links?|dead links?|404|hallucinat\w*|made[- ]up|invented|doesn't exist|does not exist|wrong (link|url|source|reference)s?|not real)\b/i,
+      resp: r => { const m = r.match(/https?:\/\/(www\.)?(example\.(com|org)|[^\s]*placeholder[^\s]*)|youtube\.com\/watch\?v=(x{3,}|X{3,}|abc\w{0,6}|12345\w*)\b|\[(link|url)\]/i); return m ? `"${m[0]}" looks like a placeholder link` : ''; },
+      line: 'Open every link and check that it works and matches its title before you include it. Never invent a source, figure or reference; mark anything you could not check as Unverified.',
+      warn: 'An earlier answer had broken or invented links or facts. Require opened, working links and an Unverified mark.' },
+    { id: 'untested', name: 'Claimed it works without testing',
+      issue: /\b(not tested|didn'?t test|did not test|untested|claimed (it )?work|said it works?|doesn'?t (work|run|compile)|does not (work|run|compile)|crash(es|ed)?|error(s)? (on|when|at)|throws?|traceback|bug(s|gy)?|failed to (run|start|compile))\b/i,
+      resp: r => /\b(this (should|will) work|should work now|works now|fully (working|tested)|all tests pass(ed)?)\b/i.test(r) && !/```[\s\S]*?(passed|failed|ok \d|✓)/i.test(r) ? 'claims it works but shows no test output' : '',
+      line: 'Run the code and the tests before you say it works, and show the actual output. List anything you could not run.',
+      warn: 'An earlier answer claimed success without running anything. Ask for real test output.' },
+    { id: 'format', name: 'Ignored the requested format',
+      issue: /\b(wrong|missing|ignored|didn'?t follow|did not follow|not in|messy|broken) (the )?(format|table|columns?|structure|layout|csv|markdown|order|template|headings?)\b|\b(format|table|columns?) (was |were )?(wrong|missing|ignored)\b/i,
+      line: 'Follow the output format in this prompt exactly: the same sections, columns and order. Check the answer against it before sending.',
+      warn: 'An earlier answer ignored the requested format. Spell out the exact columns or sections and ask for a check.' },
+    { id: 'long', name: 'Too long or wordy',
+      issue: /\b(too long|too verbose|verbose|wordy|lengthy|rambl\w*|too much text|filler|preamble)\b/i,
+      resp: r => /\bas an ai( language model)?\b|\bi hope this helps\b|\bcertainly! here\b/i.test(r) ? 'filler phrases in the answer' : '',
+      line: 'Start with the result. No preamble, disclaimers or recap; keep each section as short as it can be while complete.',
+      warn: 'An earlier answer was too long. Set a length limit and ask for no preamble.' },
+    { id: 'shallow', name: 'Too generic or shallow',
+      issue: /\b(too (short|generic|vague|shallow|basic)|generic|superficial|not (detailed|specific|deep) enough|lacks? (detail|depth|specifics)|surface[- ]level)\b/i,
+      line: 'Be specific: give numbers, names, units and one concrete example for every point. Skip anything you cannot make specific.',
+      warn: 'An earlier answer was generic. Add numbers, examples and the depth you expect.' },
+    { id: 'outdated', name: 'Outdated versions or information',
+      issue: /\b(outdated|out of date|old version|deprecated|obsolete|stale|no longer (works|exists|supported))\b/i,
+      line: 'Check current documentation and versions before using any library, API or rule; state the version or date you relied on.',
+      warn: 'An earlier answer used outdated information. Ask the AI to check current versions and state them.' },
+    { id: 'india', name: 'Wrong local conventions',
+      issue: /\b(mm\/dd|dollars?|usd|\$|wrong (currency|date format|financial year|week number)|us (date|format)|calendar year instead)\b/i,
+      line: 'Use Indian conventions: rupees with lakh grouping (1,23,456.78), dates day first (dd/mm/yyyy), financial year April to March, ISO week numbers.',
+      warn: 'An earlier answer used the wrong local conventions. Put currency, date and financial-year rules in the profile.' },
+    { id: 'deps', name: 'Unwanted dependencies',
+      issue: /\b(unwanted|extra|too many|heavy|new) (librar(y|ies)|dependenc(y|ies)|packages?)\b|\b(cdn|pip install|npm install) (failed|not allowed|blocked)\b|\bfailed to install\b/i,
+      line: 'Add no new dependency unless this prompt names it; prefer the standard library, and explain any dependency you think is unavoidable before using it.',
+      warn: 'An earlier answer added unwanted dependencies. List the allowed libraries.' },
+    { id: 'regression', name: 'Broke or removed something that worked',
+      issue: /\b(broke|broken (the )?(existing|old)|regression|removed (a |the |my )?(feature|button|function)|lost (my )?(data|feature|work)|overwr(ote|itten)|deleted my|stopped working)\b/i,
+      line: 'Before changing anything, list the existing behaviours that must keep working and re-check every one after the change. Never delete or overwrite my data.',
+      warn: 'An earlier change broke something that worked. List behaviours to preserve and ask for a regression check.' },
+    { id: 'rewrite', name: 'Rewrote instead of a small change',
+      issue: /\b(rewrote|rewritten|re-?wrote|changed everything|whole file|refactor(ed)? (everything|the whole)|unrelated changes)\b/i,
+      line: 'Make surgical edits only. Do not rewrite or reformat working files, and do not make unrelated changes.',
+      warn: 'An earlier answer rewrote too much. Ask for surgical edits only.' },
+    { id: 'ui', name: 'Layout or theme problems',
+      issue: /\b(overlap\w*|layout|misaligned|clipped|cut off on (phone|mobile)|sideways scroll|horizontal scroll|dark mode|light mode|contrast|unreadable|ugly|cramped)\b/i,
+      line: 'Before finishing, look at screenshots at 320 px, 390 px and desktop width in light and dark themes, and fix overlaps, clipping, sideways scroll and low contrast.',
+      warn: 'An earlier answer had layout or theme problems. Ask for screenshots at phone and desktop widths in both themes.' },
+    { id: 'slow', name: 'Slow or freezing',
+      issue: /\b(slow|freez(es|ing)|froze|hangs?|hanging|not responding|lag(gy|s)?|stuck)\b/i,
+      line: 'Keep long-running work off the UI thread, show progress, and measure the slow step before and after your fix.',
+      warn: 'An earlier answer produced a slow or freezing tool. Ask for background work and a measurement.' },
+    { id: 'encoding', name: 'Garbled text or encoding',
+      issue: /\b(encoding|unicode|garbled|mojibake|utf-?8|tamil (text )?(broken|garbled)|question marks instead)\b/i,
+      line: 'Read and write every file as UTF-8, keep non-Latin text intact, and test with a Tamil sample.',
+      warn: 'An earlier answer garbled non-English text. Require UTF-8 and a Tamil test.' },
+    { id: 'refused', name: 'Said it could not do something',
+      issue: /\b(refused|said it (can'?t|cannot|could not)|unable to|won'?t do|declined)\b/i,
+      resp: r => { const m = r.match(/\bI (can't|cannot|am unable to|don't have (access|the ability))[^.\n]{0,80}/i); return m ? `"${m[0]}"` : ''; },
+      line: 'If a step is impossible here, name that step and why, do everything else, and give me the closest workable route for the missing step.',
+      warn: 'An earlier answer stopped at a limitation. Ask it to name the blocked step and finish the rest.' },
+    { id: 'ignored', name: 'Ignored part of the prompt',
+      issue: /\b(ignored|didn'?t follow|did not follow|forgot|skipped|missed (some|a|the) (instruction|section|requirement|step)|not what i asked)\b/i,
+      line: 'Before you finish, go through every numbered section of this prompt and confirm each one is done, in a short checklist at the end.',
+      warn: 'An earlier answer skipped parts of the prompt. Ask for a closing checklist against every section.' },
+  ];
+
+  function diagnose(fb) {
+    const issue = str(fb.issues), resp = str(fb.response);
+    const out = [];
+    for (const p of ISSUES) {
+      const byIssue = has(issue) && p.issue.test(issue);
+      const ev = resp && p.resp ? p.resp(resp) : '';
+      if (byIssue || ev) out.push({ pattern: p.id, title: p.name, line: p.line, warning: p.warn, evidence: [byIssue ? 'your description' : '', ev].filter(Boolean).join('; ') });
+    }
+    if (!out.length && has(issue)) {
+      const s = firstSentence(issue).replace(/[.!?]$/, '');
+      out.push({ pattern: 'custom', title: s.length > 60 ? s.slice(0, 57) + '…' : s, line: `Avoid this problem from an earlier answer: ${s}.`, warning: `An earlier answer had this problem: ${s}.`, evidence: 'your description' });
+    }
+    return out;
   }
 
   function addedLines(packs, now) {
@@ -612,6 +742,6 @@ const Engine = (() => {
     return set;
   }
 
-  return { addedLines, F, T, TYPE_ORDER, PACKS, CHECKS, UNCLEAR, STYLES, build, score, vagueIn, lines, profileLines, fyLabel, isoWeek, slug, firedPacks };
+  return { diagnose, ISSUES, applyLessons, lessonApplies, addedLines, F, T, TYPE_ORDER, PACKS, CHECKS, UNCLEAR, STYLES, build, score, vagueIn, lines, profileLines, fyLabel, isoWeek, slug, firedPacks };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;

@@ -31,6 +31,7 @@
     otab: Prefs.get('otab', 'prompt'),
     lib: { q: '', type: '', tag: '', sort: 'updated' },
     mem: { q: '', field: '' },
+    fb: { versionId: '', outcome: 'partly', response: '', issues: '', proposals: null, buildId: null },
     deferredInstall: null,
   };
 
@@ -52,7 +53,7 @@
   const profileOf = id => { const p = D().profiles[id]; return p && !p.d ? p : null; };
   function compute() {
     const d = S.draft;
-    S.out = Engine.build({ type: d.type, inputs: d.inputs, options: { ...d.options, defaultUnclear: settings().unclear }, profile: profileOf(d.profileId) });
+    S.out = Engine.build({ type: d.type, inputs: d.inputs, options: { ...d.options, defaultUnclear: settings().unclear }, profile: profileOf(d.profileId), lessons: live('lessons') });
     S.out.added = Engine.addedLines(S.out.packs);
     return S.out;
   }
@@ -162,7 +163,7 @@
     const todo = [
       [live('profiles').length > 0, 'Add your profile in Saved inputs (name, currency, financial year)'],
       [builds.length > 0, 'Build your first prompt and press Save version'],
-      [builds.some(b => b.imported), 'Bring in your Prompt Manager library (Library, Import from Prompt Manager)'],
+      [live('feedback').length > 0, 'Record how an AI answer went on the Feedback tab'],
       [live('memory').length >= 5, 'Reuse a previous entry with a field\'s "Previous" button'],
       [Sync.state === 'ok' || Sync.state === 'waiting' || Sync.state === 'saving', 'Connect a sync folder in Setup (laptops and phone)'],
       [!!Prefs.get('lastBackup'), 'Download a backup once from Setup'],
@@ -185,10 +186,10 @@
 <li>In Setup, press <b>Choose sync folder</b> and pick the mirrored phone folder.</li></ol>
 <p class="small muted">iPhone, Firefox and Safari cannot open folders. Use <b>Download backup</b> and <b>Restore from backup</b> instead.</p></div>
 </div>
-<div class="stack"><h3>Moving your Prompt Manager library across</h3><p>In Library, press <b>Import from Prompt Manager</b> and choose your <code>Prompting.zip</code> or the <code>prompt_repository</code> folder. Every prompt arrives with its thinking and tags. Press <b>Export to Prompt Manager</b> to send prompts back as folders that the desktop app reads.</p></div>
+<div class="stack"><h3>Bringing prompts in</h3><p>In Setup, press <b>Restore from backup</b> and pick a Prompt Builder backup file, such as your starter or enhanced-prompts backup. Restore merges and never deletes.</p></div>
 </details>
 
-<section class="card"><h2>How it works, in seven steps</h2><ol class="steps-start">
+<section class="card"><h2>How it works, in eight steps</h2><ol class="steps-start">
 <li><h3>Set your profile once</h3><p>In <b>Saved inputs</b>, add a profile: your name, city, timezone, money format, financial year and GitHub account. It becomes the PROFILE block, the one part you change to reuse a prompt for someone else.</p></li>
 <li><h3>Pick the kind of request</h3><p>On <b>Build</b>, choose Build a tool, Extend or fix a tool, Research, Document, Data analysis, Brainstorming, Content, or Review an existing prompt. Each has its own template.</p></li>
 <li><h3>Fill only what you know</h3><p>Type into the fields, or press <b>Previous</b> beside a field to pick something you entered before (or a suggestion). Empty fields are fine; the tool fills sensible defaults and tells you which.</p></li>
@@ -196,6 +197,7 @@
 <li><h3>See how an AI will think it through</h3><p>The amber <b>Thinking</b> tab walks through the AI's reasoning step by step: the real need, what you decided, what was defaulted, what is still open, how it will verify, and what it cannot prove.</p></li>
 <li><h3>Close the gaps the score shows</h3><p><b>Quality</b> scores the prompt out of 100 against the prompting guide. Each missing item has a <b>Fix</b> button that takes you to the right field.</p></li>
 <li><h3>Copy, save, reuse</h3><p>Press <b>Copy prompt</b> and paste it into Claude. Press <b>Save version</b> to keep it in the Library with its thinking; every save is a new version, so nothing is overwritten. Every value you typed is remembered for next time.</p></li>
+<li><h3>Tell it how the answer went</h3><p>After you use the prompt, open the <b>Feedback</b> tab, paste the AI's answer or describe the issues, and press <b>Find lessons</b>. Each lesson either adds a step to future prompts or warns you when you build a similar one. Manage them under Lessons learned in <b>Saved inputs</b>.</p></li>
 </ol></section>
 
 <div class="two">
@@ -210,7 +212,7 @@
 <dt>A line I did not write is in my prompt</dt><dd>It is on a green band, so the tool added it. Open <b>Thinking</b>, find it under "Added by Prompt Builder", and untick it.</dd>
 <dt>The sync chip says Allow folder access</dt><dd>The browser forgot its permission after a restart. Press <b>Allow folder access</b> in the banner.</dd>
 <dt>A change from my other laptop has not arrived</dt><dd>OneDrive may not have delivered the file yet. Switch back to this tab after a minute; Prompt Builder reads new saves whenever the page becomes visible.</dd>
-<dt>Import found nothing</dt><dd>Choose the zip or folder that contains <code>prompt_repository</code>. Each prompt must sit in its own folder with a <code>prompt.txt</code>.</dd>
+<dt>A warning from past feedback keeps appearing</dt><dd>Open <b>Saved inputs</b>, find the lesson under Lessons learned, and pause it, narrow when it applies, or change it to add a step instead.</dd>
 <dt>Downloads do nothing</dt><dd>Some embedded previews block downloads. Open the live GitHub Pages address instead.</dd>
 </dl></section></div>`;
   }
@@ -235,7 +237,7 @@ ${T.groups.map(([g, keys], gi) => `<details class="group" ${gi === 0 || keys.som
 <details class="group"><summary><span>Prompt options</span><span class="count">${esc(Engine.STYLES[d.options.style] || 'Plain headings')}</span></summary><div class="group-body">
 <label class="f"><span class="f-head"><span class="f-name">Prompt layout</span></span><select id="f-style" data-opt="style">${Object.entries(Engine.STYLES).map(([k, v]) => `<option value="${k}"${d.options.style === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select><span class="f-hint">Plain headings match your ledger prompts; XML tags suit long prompts with several parts.</span></label>
 ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="checkbox" id="f-chatOnly" data-opt="chatOnly"${d.options.chatOnly ? ' checked' : ''}> Add the chat-only fallback (send files one at a time and wait for "continue")</label>` : ''}
-<label class="f"><span class="f-head"><span class="f-name">Tags</span><button type="button" class="mem-btn" data-act="mem" data-field="tags">Previous</button></span><input id="f-tags" data-opt="tags" value="${esc((d.tags || []).join(', '))}" placeholder="finance, web-app, github"><span class="f-hint">Comma separated. Used to filter the Library and exported to Prompt Manager.</span></label>
+<label class="f"><span class="f-head"><span class="f-name">Tags</span><button type="button" class="mem-btn" data-act="mem" data-field="tags">Previous</button></span><input id="f-tags" data-opt="tags" value="${esc((d.tags || []).join(', '))}" placeholder="finance, web-app, github"><span class="f-hint">Comma separated. Used to filter the Library.</span></label>
 </div></details>
 </form>
 <aside class="out" id="out"></aside>
@@ -265,9 +267,9 @@ ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="c
     const cls = sc.capped ? 'bad' : sc.total >= 85 ? 'good' : sc.total >= 65 ? 'warn' : 'bad';
     o.innerHTML = `<div class="status-line"><span class="pill ${cls}">${sc.total} · ${esc(sc.grade)}</span><span class="num">${sc.words.toLocaleString('en-IN')} words</span>
 ${vs.length ? `<span>v${vs[0].n} saved ${esc(fmtDate(vs[0].at))}</span>` : '<span>Not saved yet</span>'}${dirty && vs.length ? '<span class="pill warn">Unsaved changes</span>' : ''}
-${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequired.join(', '))}</span>` : ''}</div>
-<div class="otabs" role="tablist">${[['prompt', 'Prompt'], ['thinking', 'Thinking'], ['quality', 'Quality ' + sc.total], ['versions', 'Versions' + (vs.length ? ' ' + vs.length : '')]].map(([k, l]) => `<button class="otab" role="tab" data-act="otab" data-tab="${k}" aria-selected="${S.otab === k}">${esc(l)}</button>`).join('')}</div>
-<div class="panel ${S.otab === 'thinking' ? 'thinking' : ''}" id="panel">${({ prompt: outPrompt, thinking: outThinking, quality: outQuality, versions: outVersions })[S.otab](r, vs)}</div>`;
+${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequired.join(', '))}</span>` : ''}${r.warnings.length ? `<button class="pill warn" style="cursor:pointer" data-act="otab" data-tab="quality">${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''} from past feedback</button>` : ''}</div>
+<div class="otabs" role="tablist">${[['prompt', 'Prompt'], ['thinking', 'Thinking'], ['quality', 'Quality ' + sc.total], ['versions', 'Versions' + (vs.length ? ' ' + vs.length : '')], ['feedback', 'Feedback' + (d.buildId && feedbackOf(d.buildId).length ? ' ' + feedbackOf(d.buildId).length : '')]].map(([k, l]) => `<button class="otab" role="tab" data-act="otab" data-tab="${k}" aria-selected="${S.otab === k}">${esc(l)}</button>`).join('')}</div>
+<div class="panel ${S.otab === 'thinking' ? 'thinking' : ''}" id="panel">${(({ prompt: outPrompt, thinking: outThinking, quality: outQuality, versions: outVersions, feedback: outFeedback })[S.otab] || outPrompt)(r, vs)}</div>`;
     const t = $('#bTitle'); if (t) t.textContent = d.inputs.title || d.inputs.topic || d.inputs.docname || d.inputs.dataset || d.inputs.piecetype || 'Untitled prompt';
   }
 
@@ -279,7 +281,7 @@ ${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequir
       if (added.has(bare)) return `<span class="add" title="Added by Prompt Builder">${esc(l)}</span>`;
       return esc(l) + '\n';
     }).join('') : '<span class="muted">Start typing on the left. The prompt forms here.</span>';
-    return `<div class="toolbar"><button class="btn primary" data-act="copy-prompt">Copy prompt</button><button class="btn" data-act="dl-prompt">Download .txt</button><button class="btn" data-act="pm-one">Export to Prompt Manager</button></div>
+    return `<div class="toolbar"><button class="btn primary" data-act="copy-prompt">Copy prompt</button><button class="btn" data-act="dl-prompt">Download .txt</button></div>
 ${added.size ? '<div class="legend"><span><i style="background:var(--added);box-shadow:inset 3px 0 0 var(--added-line)"></i>Added by Prompt Builder</span><span><i style="background:var(--accent)"></i>Section heading</span></div>' : ''}
 <pre class="sheet" id="promptText">${html}</pre>`;
   }
@@ -306,6 +308,7 @@ ${th.map.length ? `<section class="stack"><h3>Why each section is there</h3><ul 
     const review = S.draft.type === 'review';
     return `<div class="score-head"><div class="dial" style="--p:${sc.total};--dial:${color}"><span class="num">${sc.total}</span></div>
 <div class="stack" style="gap:4px;min-width:0;flex:1"><h2>${esc(sc.grade)}</h2><p class="small muted">${sc.capped ? 'Held at 30 until the required fields are filled. ' : ''}Scored against the prompting guide. ${sc.rows.filter(x => x.status === 'pass').length} of ${sc.rows.length} checks pass${sc.penalty ? `; vague words cost ${sc.penalty} points` : ''}.</p></div></div>
+${r.warnings.length ? `<div class="stack" style="padding:14px 18px;border-bottom:1px solid var(--line);background:var(--warn-soft)"><h3>Warnings from your past feedback</h3>${r.warnings.map(w => `<div class="row spread" style="align-items:flex-start"><div class="stack" style="gap:2px;min-width:0;flex:1"><b>${esc(w.title)}${w.seen > 1 ? ` <span class="small muted">(reported ${w.seen}×)</span>` : ''}</b><span class="small">${esc(w.warning)}</span></div>${w.line ? `<button class="btn sm" data-act="warn-add" data-id="${esc(w.id)}">Add the fix to this prompt</button>` : ''}</div>`).join('')}</div>` : ''}
 <ul class="checks">${sc.rows.map(x => `<li><span class="pill ${x.status === 'pass' ? 'good' : x.status === 'partial' ? 'warn' : 'bad'}">${x.status === 'pass' ? 'Pass' : x.status === 'partial' ? 'Partial' : 'Missing'}</span><b>${esc(x.name)} <span class="small muted num">(${x.w} pts)</span></b>
 ${x.status !== 'pass' ? (review ? `<button class="btn sm" data-act="append-fix" data-check="${x.id}">Add a line</button>` : (Engine.T[S.draft.type].groups.some(g => g[1].includes(x.field)) ? `<button class="btn sm" data-act="fix" data-field="${x.field}">Fix</button>` : '<span></span>')) : '<span></span>'}
 <span class="why">${esc(x.tip)}${x.status !== 'pass' ? ' ' + esc(x.fix) : ''}</span></li>`).join('')}
@@ -416,6 +419,96 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     return out.join('');
   }
 
+  // ---------------------------------------------------------------- FEEDBACK AND LESSONS
+  const OUTCOMES = { good: ['Worked well', 'good'], partly: ['Partly worked', 'warn'], failed: ['Failed', 'bad'] };
+  function feedbackOf(buildId) { return live('feedback').filter(f => f.buildId === buildId).sort((a, b) => b.at - a.at); }
+  const scopeText = l => l.scope === 'all' ? 'every prompt' : l.scope === 'keywords' ? 'prompts mentioning ' + (l.keywords || []).map(k => `"${k}"`).join(', ') : (l.types || []).map(t => Engine.T[t] ? Engine.T[t].name : t).join(', ') + ' prompts';
+
+  function outFeedback(r, vs) {
+    const d = S.draft;
+    if (!vs.length) return `<div class="empty"><p>Save a version first. Then paste the AI's answer here, or describe what went wrong, and Prompt Builder turns it into a lesson for future prompts.</p><button class="btn primary" data-act="save-version">Save version</button></div>`;
+    const F = S.fb;
+    if (F.buildId !== d.buildId) { Object.assign(F, { buildId: d.buildId, versionId: vs[0].id, outcome: 'partly', response: '', issues: '', proposals: null }); }
+    if (!vs.some(v => v.id === F.versionId)) F.versionId = vs[0].id;
+    const past = feedbackOf(d.buildId);
+    const props = F.proposals;
+    return `<div class="think-body" style="gap:16px">
+<section class="stack"><h3 style="color:var(--muted)">How did the AI's answer go?</h3>
+<p class="small muted">Paste the answer you got, or just describe the issues. Prompt Builder spots the problem and proposes a lesson: either a step added to future prompts, or a warning shown when you build a similar prompt.</p>
+<div class="row"><label class="f" style="min-width:160px;flex:1"><span class="f-name">For version</span><select id="fbVersion">${vs.map(v => `<option value="${v.id}"${v.id === F.versionId ? ' selected' : ''}>v${v.n} · ${esc(fmtDate(v.at))}</option>`).join('')}</select></label>
+<div class="f" style="flex:2;min-width:240px"><span class="f-name">Result</span><div class="row" role="radiogroup" aria-label="Result">${Object.entries(OUTCOMES).map(([k, [l]]) => `<label class="check"><input type="radio" name="fbOutcome" value="${k}"${F.outcome === k ? ' checked' : ''}> ${l}</label>`).join('')}</div></div></div>
+<label class="f" for="fbIssues"><span class="f-name">What went wrong, or issues you faced</span><textarea id="fbIssues" rows="3" placeholder="e.g. It asked me five questions before starting, and two links were broken.">${esc(F.issues)}</textarea></label>
+<label class="f" for="fbResponse"><span class="f-name">The AI's answer (optional)</span><textarea id="fbResponse" rows="5" class="big" style="min-height:120px" placeholder="Paste the response here. It is checked for placeholders, invented links, questions instead of work and similar problems.">${esc(F.response)}</textarea></label>
+<div class="row"><button class="btn primary" data-act="fb-analyse">Find lessons</button>${F.outcome === 'good' && !String(F.issues).trim() ? '<button class="btn" data-act="fb-save">Save feedback</button>' : ''}</div>
+</section>
+${props ? `<section class="stack"><h3 style="color:var(--muted)">Proposed lessons</h3>${props.length ? props.map((p, i) => lessonCard(p, i)).join('') + `<div class="row"><button class="btn primary" data-act="fb-save">Save feedback and ${props.filter(p => p.keep).length} lesson${props.filter(p => p.keep).length === 1 ? '' : 's'}</button></div>` : '<p>No problem found in what you entered. Describe the issue in a sentence and press Find lessons again, or save the feedback as it is.</p><div class="row"><button class="btn" data-act="fb-save">Save feedback</button></div>'}</section>` : ''}
+${past.length ? `<section class="stack"><h3 style="color:var(--muted)">Earlier feedback on this prompt</h3><div class="list">${past.map(f => { const v = D().versions[f.versionId]; const ls = (f.lessonIds || []).map(id => D().lessons[id]).filter(l => l && !l.d); return `<div class="item"><div class="stack" style="gap:4px;min-width:0"><div class="meta"><span class="pill ${OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][1] : 'plain'}">${esc(OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][0] : f.outcome)}</span><span>${v && !v.d ? 'v' + v.n : 'deleted version'}</span><span>${esc(fmtDate(f.at))}</span></div>${f.issues ? `<p class="small" style="white-space:pre-wrap">${esc(f.issues)}</p>` : ''}${ls.length ? `<p class="small muted">Lessons: ${ls.map(l => esc(l.title)).join('; ')}</p>` : ''}</div><div class="row"><button class="btn sm danger" data-act="fb-del" data-id="${f.id}">Delete</button></div></div>`; }).join('')}</div></section>` : ''}
+</div>`;
+  }
+  function lessonCard(p, i) {
+    const t = S.draft.type;
+    return `<div class="card" style="gap:10px;background:var(--surface)" data-prop="${i}">
+<label class="check"><input type="checkbox" data-pf="keep"${p.keep ? ' checked' : ''}> <b>${esc(p.title)}</b>${p.existing ? ' <span class="pill plain">Seen before; will be counted again</span>' : ''}</label>
+${p.evidence ? `<p class="small muted">Found from ${esc(p.evidence)}.</p>` : ''}
+<label class="f"><span class="f-name">Lesson name</span><input data-pf="title" value="${esc(p.title)}"></label>
+<div class="f"><span class="f-name">What should happen next time</span><div class="row"><label class="check"><input type="radio" name="pm${i}" data-pf="mode" value="step"${p.mode === 'step' ? ' checked' : ''}> Add a step to future prompts</label><label class="check"><input type="radio" name="pm${i}" data-pf="mode" value="warn"${p.mode === 'warn' ? ' checked' : ''}> Only warn me</label></div></div>
+<div class="row"><label class="f" style="flex:1;min-width:200px"><span class="f-name">Applies to</span><select data-pf="scope"><option value="type"${p.scope === 'type' ? ' selected' : ''}>${esc(Engine.T[t].name)} prompts</option><option value="all"${p.scope === 'all' ? ' selected' : ''}>Every prompt</option><option value="keywords"${p.scope === 'keywords' ? ' selected' : ''}>Prompts mentioning…</option></select></label>
+${p.scope === 'keywords' ? `<label class="f" style="flex:1;min-width:200px"><span class="f-name">Words (comma separated)</span><input data-pf="keywords" value="${esc((p.keywords || []).join(', '))}" placeholder="ocr, tamil"></label>` : ''}</div>
+<label class="f"><span class="f-name">Step added to prompts</span><textarea data-pf="line" rows="3">${esc(p.line)}</textarea></label>
+<label class="f"><span class="f-name">Warning shown</span><textarea data-pf="warning" rows="2">${esc(p.warning)}</textarea></label>
+</div>`;
+  }
+  function findSimilar(p, type) {
+    if (p.pattern === 'custom') return null;
+    return live('lessons').find(l => l.pattern === p.pattern && (l.scope === 'all' || p.scope === 'all' || (l.types || []).includes(type)));
+  }
+  function analyseFeedback() {
+    const F = S.fb; const t = S.draft.type;
+    const found = Engine.diagnose({ issues: F.issues, response: F.response });
+    F.proposals = found.map(f => { const p = { ...f, keep: true, mode: 'step', scope: 'type', keywords: [] }; const ex = findSimilar(p, t); if (ex) Object.assign(p, { existing: ex.id, mode: ex.mode, scope: ex.scope, keywords: ex.keywords || [], line: ex.line, warning: ex.warning, title: ex.title }); return p; });
+    if (!found.length && !String(F.issues).trim() && !String(F.response).trim()) { toast('Describe the issue or paste the answer first'); F.proposals = null; return; }
+    paintOut();
+  }
+  function saveFeedback() {
+    const F = S.fb; const d = S.draft; const now = Date.now(); const ids = [];
+    for (const p of (F.proposals || []).filter(x => x.keep)) {
+      const kws = (p.keywords || []).map(k => k.trim()).filter(Boolean);
+      const base = { title: (p.title || 'Lesson').trim(), pattern: p.pattern, line: (p.line || '').trim(), warning: (p.warning || '').trim(), mode: p.mode, scope: p.scope === 'keywords' && !kws.length ? 'type' : p.scope, keywords: kws, active: true };
+      const ex = p.existing && D().lessons[p.existing] && !D().lessons[p.existing].d ? D().lessons[p.existing] : null;
+      const src = { buildId: d.buildId, versionId: F.versionId, title: (D().builds[d.buildId] || {}).title || '', at: now };
+      const rec = ex
+        ? { ...ex, ...base, types: Array.from(new Set((ex.types || []).concat([d.type]))), seen: (ex.seen || 1) + 1, lastAt: now, issue: F.issues || ex.issue, sources: (ex.sources || []).concat([src]).slice(-20) }
+        : { id: Model.rid('l_'), ...base, types: [d.type], seen: 1, firstAt: now, lastAt: now, issue: F.issues, sources: [src] };
+      Store.put('lessons', rec, { batch: true }); ids.push(rec.id);
+    }
+    Store.put('feedback', { id: Model.rid('f_'), buildId: d.buildId, versionId: F.versionId, at: now, outcome: F.outcome, issues: String(F.issues || '').slice(0, 5000), response: String(F.response || '').slice(0, 60000), lessonIds: ids }, { batch: true });
+    Store.commit();
+    Object.assign(F, { response: '', issues: '', proposals: null, outcome: 'partly' });
+    toast(ids.length ? `Saved feedback and ${ids.length} lesson${ids.length > 1 ? 's' : ''}` : 'Feedback saved');
+    rerender();
+  }
+  function lessonDialog(l) {
+    const isNew = !l;
+    l = l || { id: Model.rid('l_'), title: '', pattern: 'custom', line: '', warning: '', mode: 'step', scope: 'all', types: [S.draft.type], keywords: [], active: true, seen: 1, firstAt: Date.now(), lastAt: Date.now(), issue: '', sources: [] };
+    const sh = modal(`<h2>${isNew ? 'Add a lesson' : 'Edit lesson'}</h2>
+<label class="f"><span class="f-name">Lesson name</span><input id="lTitle" value="${esc(l.title)}" placeholder="e.g. Asked questions instead of working"></label>
+<label class="f"><span class="f-name">What should happen</span><select id="lMode"><option value="step"${l.mode === 'step' ? ' selected' : ''}>Add a step to future prompts</option><option value="warn"${l.mode === 'warn' ? ' selected' : ''}>Only warn me</option></select></label>
+<label class="f"><span class="f-name">Applies to</span><select id="lScope"><option value="all"${l.scope === 'all' ? ' selected' : ''}>Every prompt</option><option value="type"${l.scope === 'type' ? ' selected' : ''}>These kinds of prompt</option><option value="keywords"${l.scope === 'keywords' ? ' selected' : ''}>Prompts mentioning these words</option></select></label>
+<div class="f"><span class="f-name">Kinds of prompt (for "These kinds")</span><div class="row">${Engine.TYPE_ORDER.map(t => `<label class="check small"><input type="checkbox" class="lType" value="${t}"${(l.types || []).includes(t) ? ' checked' : ''}> ${esc(Engine.T[t].short)}</label>`).join('')}</div></div>
+<label class="f"><span class="f-name">Words (for "Prompts mentioning")</span><input id="lKw" value="${esc((l.keywords || []).join(', '))}" placeholder="ocr, tamil"></label>
+<label class="f"><span class="f-name">Step added to prompts</span><textarea id="lLine" rows="3">${esc(l.line)}</textarea></label>
+<label class="f"><span class="f-name">Warning shown</span><textarea id="lWarn" rows="2">${esc(l.warning)}</textarea></label>
+<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save lesson</button></div>`);
+    $('[data-x=no]', sh).onclick = closeModal;
+    $('[data-x=yes]', sh).onclick = () => {
+      const rec = { ...l, title: $('#lTitle').value.trim() || 'Lesson', mode: $('#lMode').value, scope: $('#lScope').value, types: $$('.lType', sh).filter(x => x.checked).map(x => x.value), keywords: $('#lKw').value.split(',').map(x => x.trim()).filter(Boolean), line: $('#lLine').value.trim(), warning: $('#lWarn').value.trim() };
+      if (rec.scope === 'type' && !rec.types.length) rec.types = [S.draft.type];
+      if (rec.scope === 'keywords' && !rec.keywords.length) { toast('Add at least one word, or choose another scope'); return; }
+      if (!rec.line && !rec.warning) { toast('Write a step or a warning'); return; }
+      Store.put('lessons', rec); closeModal(); toast('Lesson saved'); rerender();
+    };
+  }
+
   // ---------------------------------------------------------------- LIBRARY
   function pLibrary(m) {
     const all = live('builds');
@@ -426,20 +519,20 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     list.sort(S.lib.sort === 'title' ? (a, b) => a.title.localeCompare(b.title) : S.lib.sort === 'score' ? (a, b) => ((b.latest || {}).score || 0) - ((a.latest || {}).score || 0) : (a, b) => b.u - a.u);
     m.innerHTML = `<div class="page narrow">${banners()}
 <div class="row spread"><div class="stack" style="gap:2px"><span class="eyebrow">Library</span><h1>${all.length} saved prompt${all.length === 1 ? '' : 's'}</h1></div>
-<div class="row"><button class="btn" data-act="pm-import">Import from Prompt Manager</button><button class="btn" data-act="pm-all"${all.length ? '' : ' disabled'}>Export all to Prompt Manager</button></div></div>
+</div>
 <div class="filters"><input type="search" id="libQ" placeholder="Search titles, tags, prompt and thinking" value="${esc(S.lib.q)}" aria-label="Search library">
 <select id="libType" aria-label="Kind"><option value="">All kinds</option>${Engine.TYPE_ORDER.map(t => `<option value="${t}"${S.lib.type === t ? ' selected' : ''}>${esc(Engine.T[t].name)}</option>`).join('')}</select>
 <select id="libTag" aria-label="Tag"><option value="">All tags</option>${tags.map(t => `<option${S.lib.tag === t ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
 <select id="libSort" aria-label="Sort"><option value="updated"${S.lib.sort === 'updated' ? ' selected' : ''}>Recently changed</option><option value="title"${S.lib.sort === 'title' ? ' selected' : ''}>Title</option><option value="score"${S.lib.sort === 'score' ? ' selected' : ''}>Score</option></select></div>
 <p class="small muted" id="libCount">${list.length} of ${all.length} shown</p>
-${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div class="card empty">${all.length ? '<p>No prompt matches these filters.</p><button class="btn" data-act="lib-reset">Reset filters</button>' : '<p>Nothing saved yet. Build a prompt and press Save version, bring in your Prompt Manager library, or load the sample.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#build">Build a prompt</a><button class="btn" data-act="pm-import">Import from Prompt Manager</button><button class="btn" data-act="sample-load">Load sample data</button></div>'}</div>`}
+${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div class="card empty">${all.length ? '<p>No prompt matches these filters.</p><button class="btn" data-act="lib-reset">Reset filters</button>' : '<p>Nothing saved yet. Build a prompt and press Save version, restore a backup in Setup, or load the sample.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#build">Build a prompt</a><button class="btn" data-act="sample-load">Load sample data</button></div>'}</div>`}
 </div>`;
   }
   function libItem(b) {
     const v = latestVersion(b.id); const n = versionsOf(b.id).length;
     return `<div class="item"><div class="stack" style="gap:6px;min-width:0"><h3 style="overflow-wrap:anywhere">${esc(b.title)}${b.sample ? ' <span class="pill plain">Sample</span>' : ''}${b.imported ? ' <span class="pill plain">Imported</span>' : ''}</h3>
 <div class="meta"><span>${esc(Engine.T[b.type] ? Engine.T[b.type].name : b.type)}</span><span>${n} version${n === 1 ? '' : 's'}</span>${v ? `<span class="num">Score ${v.score}</span><span class="num">${words(v.prompt).toLocaleString('en-IN')} words</span>` : ''}<span>Changed ${esc(fmtDate(b.u))}</span>${(b.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
-<div class="row"><button class="btn sm primary" data-act="open" data-id="${b.id}">Open</button><button class="btn sm" data-act="lib-copy" data-id="${b.id}"${v ? '' : ' disabled'}>Copy prompt</button><button class="btn sm" data-act="dup" data-id="${b.id}">Duplicate</button><button class="btn sm" data-act="pm-build" data-id="${b.id}"${v ? '' : ' disabled'}>Prompt Manager</button><button class="btn sm danger" data-act="del" data-id="${b.id}">Delete</button></div></div>`;
+<div class="row"><button class="btn sm primary" data-act="open" data-id="${b.id}">Open</button><button class="btn sm" data-act="lib-copy" data-id="${b.id}"${v ? '' : ' disabled'}>Copy prompt</button><button class="btn sm" data-act="dup" data-id="${b.id}">Duplicate</button><button class="btn sm danger" data-act="del" data-id="${b.id}">Delete</button></div></div>`;
   }
 
   function openBuild(id) {
@@ -452,75 +545,6 @@ ${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div 
     else go();
   }
 
-  // ---------------------------------------------------------------- Prompt Manager import / export
-  function pmRecords(builds) {
-    return builds.map(b => { const v = latestVersion(b.id); return v ? { title: b.title, prompt: v.prompt, thinking: v.thinking, tags: b.tags || [] } : null; }).filter(Boolean);
-  }
-  function pmExport(builds, name) {
-    const recs = pmRecords(builds); if (!recs.length) { toast('Save a version first'); return; }
-    download(name, new Blob([Files.zip(Files.pmEntries(recs))], { type: 'application/zip' }));
-  }
-
-  function pmImportDialog() {
-    const sh = modal(`<h2>Import from Prompt Manager</h2><p>Choose your <code>Prompting.zip</code>, or the <code>prompt_repository</code> folder itself. Every prompt folder with a <code>prompt.txt</code> comes in with its <code>thinking.txt</code> and tags. Nothing is saved until you press Import.</p>
-<div class="row"><label class="btn primary" for="pmZip">Choose zip file</label><input type="file" id="pmZip" accept=".zip,application/zip" hidden>
-<label class="btn" for="pmDir">Choose folder</label><input type="file" id="pmDir" webkitdirectory multiple hidden></div>
-<div id="pmStatus" class="small muted"></div><div id="pmPreview"></div>
-<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Close</button></div>`, { wide: true });
-    $('[data-x=no]', sh).onclick = closeModal;
-    $('#pmZip').onchange = async e => {
-      const f = e.target.files[0]; if (!f) return;
-      $('#pmStatus').textContent = `Reading ${f.name} (${(f.size / 1048576).toFixed(1)} MB)…`;
-      try {
-        const u8 = new Uint8Array(await f.arrayBuffer());
-        const list = Files.zipList(u8);
-        const byName = new Map(list.map(x => [x.name, x]));
-        const groups = Files.pmGroups(list.map(x => x.name));
-        const read = async p => p ? Files.dec.decode(await Files.zipRead(u8, byName.get(p))) : '';
-        const items = [];
-        for (const g of groups) items.push({ title: g.title, prompt: await read(g.prompt), thinking: await read(g.thinking), tags: g.meta ? Files.parseMeta(await read(g.meta)) : [] });
-        pmPreview(items, `${list.length.toLocaleString('en-IN')} files scanned in ${f.name}.`);
-      } catch (err) { $('#pmStatus').textContent = 'Could not read this zip: ' + err.message; }
-    };
-    $('#pmDir').onchange = async e => {
-      const files = Array.from(e.target.files || []);
-      const map = new Map(files.map(f => [f.webkitRelativePath || f.name, f]));
-      const groups = Files.pmGroups([...map.keys()]);
-      const read = async p => p ? await map.get(p).text() : '';
-      const items = [];
-      for (const g of groups) items.push({ title: g.title, prompt: await read(g.prompt), thinking: await read(g.thinking), tags: g.meta ? Files.parseMeta(await read(g.meta)) : [] });
-      pmPreview(items, `${files.length.toLocaleString('en-IN')} files scanned.`);
-    };
-  }
-  function pmStatusOf(it) {
-    const same = live('builds').filter(b => b.title.toLowerCase() === it.title.toLowerCase());
-    for (const b of same) { const v = latestVersion(b.id); if (v && v.prompt === it.prompt && (v.thinking || '') .includes((it.thinking || '').trim())) return { s: 'Already stored', b }; }
-    if (same.length) return { s: 'New version', b: same[0] };
-    return { s: 'New' };
-  }
-  function pmPreview(items, msg) {
-    $('#pmStatus').textContent = `${msg} Found ${items.length} prompt${items.length === 1 ? '' : 's'}.`;
-    if (!items.length) { $('#pmPreview').innerHTML = '<p>No prompt folders were found. Choose the zip or folder that contains <code>prompt_repository</code>.</p>'; return; }
-    const rows = items.map(it => ({ it, st: pmStatusOf(it) }));
-    $('#pmPreview').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Prompt</th><th>Tags</th><th>Words</th><th>Thinking</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.it.title)}</td><td>${esc(r.it.tags.join(', '))}</td><td class="num">${words(r.it.prompt).toLocaleString('en-IN')}</td><td>${r.it.thinking.trim() ? 'Yes' : 'No'}</td><td><span class="pill ${r.st.s === 'New' ? 'good' : r.st.s === 'New version' ? 'warn' : 'plain'}">${r.st.s}</span></td></tr>`).join('')}</tbody></table></div>
-<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn primary" id="pmGo"${rows.some(r => r.st.s !== 'Already stored') ? '' : ' disabled'}>Import ${rows.filter(r => r.st.s !== 'Already stored').length}</button></div>`;
-    $('#pmGo').onclick = () => {
-      let n = 0;
-      for (const { it, st } of rows) {
-        if (st.s === 'Already stored') continue;
-        const now = Date.now();
-        const inputs = { title: it.title, prompt: it.prompt, thinking: it.thinking };
-        const r = Engine.build({ type: 'review', inputs, options: {} });
-        const id = st.b ? st.b.id : Model.rid('b_');
-        const vn = st.b ? versionsOf(id).reduce((m, v) => Math.max(m, v.n || 0), 0) + 1 : 1;
-        Store.put('builds', { id, title: it.title, type: 'review', tags: it.tags, inputs, options: { style: 'plain', off: {} }, profileId: '', imported: 1, created: st.b ? st.b.created : now, latest: { n: vn, score: r.score.total, words: r.score.words, at: now } }, { batch: true });
-        Store.put('versions', { id: Model.rid('v_'), buildId: id, n: vn, at: now, note: 'Imported from Prompt Manager', type: 'review', tags: it.tags, prompt: it.prompt, thinking: it.thinking.trim() ? it.thinking : r.thinkingText, score: r.score.total, inputs, options: { style: 'plain', off: {} }, profileId: '', device: Sync.device() }, { batch: true });
-        n++;
-      }
-      Store.commit(); closeModal(); toast(`Imported ${n} prompt${n === 1 ? '' : 's'}`); S.route === 'library' ? rerender() : (location.hash = '#library');
-    };
-  }
-
   // ---------------------------------------------------------------- SAVED INPUTS
   function pInputs(m) {
     const profiles = live('profiles').sort((a, b) => String(a.label).localeCompare(b.label));
@@ -530,7 +554,8 @@ ${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div 
     const shown = mem.filter(x => (!S.mem.field || x.field === S.mem.field) && (!q || x.value.toLowerCase().includes(q)));
     const groups = fields.filter(f => shown.some(x => x.field === f));
     m.innerHTML = `<div class="page narrow">${banners()}
-<div class="stack" style="gap:2px"><span class="eyebrow">Saved inputs</span><h1>Profiles and previous entries</h1><p class="muted">Everything you type is remembered when you save a version, so next time you pick it instead of typing it. Pin what you use most.</p></div>
+<div class="stack" style="gap:2px"><span class="eyebrow">Saved inputs</span><h1>Lessons, profiles and previous entries</h1><p class="muted">Everything you type is remembered when you save a version, so next time you pick it instead of typing it. Pin what you use most.</p></div>
+${lessonsSection()}
 <section class="card"><div class="row spread"><h2>Profiles</h2><button class="btn primary" data-act="prof-new">Add profile</button></div>
 <p class="small muted">A profile becomes the PROFILE block of Build and Extend prompts. Change the profile to reuse a prompt for someone else.</p>
 ${profiles.length ? `<div class="list">${profiles.map(p => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>${esc(p.label)}${settings().profileId === p.id ? ' <span class="pill plain">Default</span>' : ''}</h3><p class="small muted" style="white-space:pre-wrap">${esc(Engine.profileLines(p).join('\n'))}</p></div>
@@ -540,6 +565,15 @@ ${profiles.length ? `<div class="list">${profiles.map(p => `<div class="item"><d
 ${groups.length ? groups.map(f => `<div class="stack"><h3>${esc(label(f))}</h3><div class="list">${shown.filter(x => x.field === f).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.last - a.last).map(x => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(x.value.length > 600 ? x.value.slice(0, 600) + '…' : x.value)}</p><div class="meta"><span class="num">Used ${x.uses || 1}×</span><span>Last ${esc(fmtDate(x.last))}</span>${x.pinned ? '<span class="pill plain">Pinned</span>' : ''}</div></div>
 <div class="row"><button class="btn sm" data-act="mem-pin" data-id="${x.id}">${x.pinned ? 'Unpin' : 'Pin'}</button><button class="btn sm" data-act="mem-edit" data-id="${x.id}">Edit</button><button class="btn sm danger" data-act="mem-del" data-id="${x.id}">Delete</button></div></div>`).join('')}</div></div>`).join('') : `<div class="empty"><p>${mem.length ? 'No entry matches.' : 'Nothing remembered yet. Save a version on Build and its inputs appear here.'}</p></div>`}
 </section></div>`;
+  }
+  function lessonsSection() {
+    const ls = live('lessons').sort((a, b) => (b.active !== false) - (a.active !== false) || (b.lastAt || 0) - (a.lastAt || 0));
+    return `<section class="card" id="lessons"><div class="row spread"><h2>Lessons learned <span class="muted small num">(${ls.length})</span></h2><button class="btn" data-act="lesson-new">Add lesson</button></div>
+<p class="small muted">Made from your feedback on AI answers. A lesson either adds a step to every matching prompt, in a section called "Lessons from earlier answers", or shows a warning while you build one.</p>
+${ls.length ? `<div class="list">${ls.map(l => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>${esc(l.title)}</h3>
+<div class="meta"><span class="pill ${l.active === false ? 'plain' : l.mode === 'step' ? 'good' : 'warn'}">${l.active === false ? 'Paused' : l.mode === 'step' ? 'Adds a step' : 'Warns'}</span><span>${esc(scopeText(l))}</span><span class="num">Reported ${l.seen || 1}×</span>${l.lastAt ? `<span>Last ${esc(fmtDate(l.lastAt))}</span>` : ''}</div>
+<p class="small" style="white-space:pre-wrap">${esc(l.mode === 'step' ? l.line : (l.warning || l.line))}</p>${(l.sources || []).length ? `<p class="small muted">From: ${esc(Array.from(new Set(l.sources.map(x => x.title).filter(Boolean))).join(', '))}</p>` : ''}</div>
+<div class="row"><button class="btn sm" data-act="lesson-mode" data-id="${l.id}">${l.mode === 'step' ? 'Warn only' : 'Add as step'}</button><button class="btn sm" data-act="lesson-pause" data-id="${l.id}">${l.active === false ? 'Resume' : 'Pause'}</button><button class="btn sm" data-act="lesson-edit" data-id="${l.id}">Edit</button><button class="btn sm danger" data-act="lesson-del" data-id="${l.id}">Delete</button></div></div>`).join('')}</div>` : '<div class="empty"><p>No lessons yet. After you use a prompt, open its Feedback tab on Build and describe how the answer went.</p></div>'}</section>`;
   }
   const label = f => f === 'tags' ? 'Tags' : (Engine.F[f] ? Engine.F[f].label : f);
 
@@ -575,7 +609,7 @@ ${Sync.supported ? `<p>Pick a folder inside OneDrive. This device writes one sav
 <section class="card"><h2>Your data</h2>
 <div class="row"><button class="btn" data-act="backup">Download backup</button><label class="btn" for="restoreFile">Restore from backup</label><input type="file" id="restoreFile" accept=".json,application/json" hidden></div>
 <p class="small muted">Restore merges a backup into this device: newer records win, nothing is deleted.</p>
-<div class="row"><button class="btn" data-act="xlsx">Export everything to Excel</button><button class="btn" data-act="csv">Export library to CSV</button><button class="btn" data-act="pm-all">Export all to Prompt Manager</button><button class="btn" data-act="pm-import">Import from Prompt Manager</button></div>
+<div class="row"><button class="btn" data-act="xlsx">Export everything to Excel</button><button class="btn" data-act="csv">Export library to CSV</button></div>
 <div class="row"><button class="btn" data-act="sample-load">Load sample data</button><button class="btn" data-act="sample-remove">Remove sample data</button></div>
 <p class="small muted">Stored on this device in ${Store.mode === 'idb' ? 'browser storage (IndexedDB)' : '<b>memory only</b>; download a backup before closing'}: ${live('builds').length} prompts, ${live('versions').length} versions, ${live('memory').length} saved entries, ${profiles.length} profiles.</p>
 </section>
@@ -615,6 +649,8 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
       { name: 'Library', rows: [LIB_HEAD].concat(libraryRows()), widths: [34, 22, 22, 10, 12, 10, 20, 80, 80] },
       { name: 'Versions', rows: [['Title', 'Version', 'Saved', 'Note', 'Score', 'Words', 'Prompt']].concat(vers), widths: [34, 9, 20, 30, 8, 8, 100] },
       { name: 'Saved inputs', rows: [['Field', 'Value', 'Uses', 'Last used', 'Pinned']].concat(mem), widths: [26, 90, 8, 20, 8] },
+      { name: 'Lessons', rows: [['Lesson', 'Mode', 'Applies to', 'Active', 'Reported', 'Step added', 'Warning', 'Last reported']].concat(live('lessons').map(l => [l.title, l.mode === 'step' ? 'Adds a step' : 'Warns', scopeText(l), l.active === false ? 'No' : 'Yes', l.seen || 1, l.line || '', l.warning || '', fmtDate(l.lastAt)])), widths: [34, 12, 30, 8, 9, 70, 60, 20] },
+      { name: 'Feedback', rows: [['Prompt', 'Version', 'Date', 'Result', 'Issues', 'Lessons']].concat(live('feedback').map(f => { const b = D().builds[f.buildId]; const v = D().versions[f.versionId]; return [b && !b.d ? b.title : '(deleted)', v && !v.d ? v.n : '', fmtDate(f.at), OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][0] : f.outcome, f.issues || '', (f.lessonIds || []).map(id => (D().lessons[id] || {}).title).filter(Boolean).join('; ')]; })), widths: [34, 8, 20, 14, 70, 50] },
     ]);
     download(`Prompt_Builder_All_${stampName()}.xlsx`, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   }
@@ -633,7 +669,7 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
   }
   function removeSample() {
     let n = 0;
-    for (const c of ['builds', 'versions', 'profiles', 'memory']) for (const r of Object.values(D()[c])) if (!r.d && r.sample) { Store.remove(c, r.id, { batch: true }); n++; }
+    for (const c of ['builds', 'versions', 'profiles', 'memory', 'lessons', 'feedback']) for (const r of Object.values(D()[c])) if (!r.d && r.sample) { Store.remove(c, r.id, { batch: true }); n++; }
     if (S.draft.buildId && D().builds[S.draft.buildId] && D().builds[S.draft.buildId].d) { S.draft = newDraft(S.draft.type); saveDraft(); }
     if (S.draft.profileId === 'p_sample') { S.draft.profileId = ''; saveDraft(); }
     Store.commit(); toast(n ? 'Sample data removed' : 'No sample data to remove'); rerender();
@@ -656,6 +692,11 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
       else if (k === 'style') S.draft.options.style = t.value;
       else if (k === 'profileId') S.draft.profileId = t.value;
       saveDraft(); paintOut();
+    } else if (t.id === 'fbIssues') { S.fb.issues = t.value; }
+    else if (t.id === 'fbResponse') { S.fb.response = t.value; }
+    else if (t.matches('[data-pf]') && t.type !== 'radio' && t.type !== 'checkbox' && t.tagName !== 'SELECT') {
+      const p = S.fb.proposals[+t.closest('[data-prop]').dataset.prop]; const k = t.dataset.pf;
+      p[k] = k === 'keywords' ? t.value.split(',').map(x => x.trim()) : t.value;
     } else if (t.id === 'libQ') { S.lib.q = t.value; const pos = t.selectionStart; rerender(); const n = $('#libQ'); n.focus(); n.setSelectionRange(pos, pos); }
     else if (t.id === 'memQ') { S.mem.q = t.value; const pos = t.selectionStart; rerender(); const n = $('#memQ'); n.focus(); n.setSelectionRange(pos, pos); }
   }
@@ -669,6 +710,13 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     else if (t.id === 'setUnclear') { saveSettings({ unclear: t.value }); toast('Default saved'); }
     else if (t.id === 'setProfile') { saveSettings({ profileId: t.value }); toast('Default profile saved'); }
     else if (t.id === 'setTheme') { Prefs.set('theme', t.value); paintTheme(); }
+    else if (t.id === 'fbVersion') { S.fb.versionId = t.value; }
+    else if (t.name === 'fbOutcome') { S.fb.outcome = t.value; paintOut(); }
+    else if (t.matches('[data-pf]')) {
+      const p = S.fb.proposals[+t.closest('[data-prop]').dataset.prop]; const k = t.dataset.pf;
+      if (k === 'keep') p.keep = t.checked; else p[k] = t.value;
+      if (k === 'scope' || k === 'keep') paintOut();
+    }
     else if (t.id === 'restoreFile' && t.files[0]) { doRestore(t.files[0]); t.value = ''; }
     else if (t.matches('[data-act=pack]')) { S.draft.options.off = { ...(S.draft.options.off || {}) }; if (t.checked) delete S.draft.options.off[t.dataset.pack]; else S.draft.options.off[t.dataset.pack] = true; saveDraft(); paintOut(); }
     else if (t.matches('select[data-field]') && S.route === 'build') { S.draft.inputs[t.dataset.field] = t.value; saveDraft(); paintOut(); }
@@ -691,10 +739,6 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     'copy-prompt'() { copy(S.out.prompt, 'Prompt'); },
     'copy-thinking'() { copy(S.out.thinkingText, 'Thinking'); },
     'dl-prompt'() { download(`${Files.safeFolder(S.draft.inputs.title || 'prompt') || 'prompt'}.txt`, S.out.prompt, 'text/plain;charset=utf-8'); },
-    'pm-one'() {
-      const r = S.out; const title = S.draft.inputs.title || S.draft.inputs.topic || 'Untitled prompt';
-      download(`${Files.safeFolder(title)}_PromptManager.zip`, new Blob([Files.zip(Files.pmEntries([{ title, prompt: r.prompt, thinking: r.thinkingText, tags: S.draft.tags || [] }]))], { type: 'application/zip' }));
-    },
     'mem'(b) { if (popEl && popEl.dataset.field === b.dataset.field) return closePop(); openPop(b, b.dataset.field); popEl.dataset.field = b.dataset.field; },
     'fix'(b) {
       const k = b.dataset.field; const det = $('#f-' + k) && $('#f-' + k).closest('details'); if (det) det.open = true;
@@ -712,11 +756,8 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     'open'(b) { openBuild(b.dataset.id); },
     'lib-copy'(b) { const v = latestVersion(b.dataset.id); if (v) copy(v.prompt, 'Prompt'); },
     'dup'(b) { const src = D().builds[b.dataset.id]; const go = () => { S.draft = { buildId: null, type: src.type, tags: src.tags || [], inputs: { ...src.inputs, title: (src.inputs.title || src.title) + ' (copy)' }, options: { style: 'plain', off: {}, ...(src.options || {}) }, profileId: src.profileId || '' }; saveDraft(); location.hash = '#build'; toast('Copy opened on Build. Save a version to keep it.'); }; if (isDirty()) confirmBox('Replace unsaved inputs?', 'Build has unsaved changes. Duplicate anyway?', 'Duplicate', go); else go(); },
-    'del'(b) { const x = D().builds[b.dataset.id]; confirmBox('Delete this prompt?', `"${esc(x.title)}" and its ${versionsOf(x.id).length} version(s) will be deleted on every synced device. Download a backup first if you may want it back.`, 'Delete', () => { versionsOf(x.id).forEach(v => Store.remove('versions', v.id, { batch: true })); Store.remove('builds', x.id, { batch: true }); Store.commit(); if (S.draft.buildId === x.id) { S.draft.buildId = null; saveDraft(); } toast('Deleted'); rerender(); }, true); },
+    'del'(b) { const x = D().builds[b.dataset.id]; confirmBox('Delete this prompt?', `"${esc(x.title)}" and its ${versionsOf(x.id).length} version(s) will be deleted on every synced device. Download a backup first if you may want it back.`, 'Delete', () => { versionsOf(x.id).forEach(v => Store.remove('versions', v.id, { batch: true })); feedbackOf(x.id).forEach(f => Store.remove('feedback', f.id, { batch: true })); Store.remove('builds', x.id, { batch: true }); Store.commit(); if (S.draft.buildId === x.id) { S.draft.buildId = null; saveDraft(); } toast('Deleted'); rerender(); }, true); },
     'lib-reset'() { S.lib = { q: '', type: '', tag: '', sort: 'updated' }; rerender(); },
-    'pm-build'(b) { const x = D().builds[b.dataset.id]; pmExport([x], `${Files.safeFolder(x.title)}_PromptManager.zip`); },
-    'pm-all'() { pmExport(live('builds'), `Prompt_Manager_repository_${stampName()}.zip`); },
-    'pm-import'() { pmImportDialog(); },
     'prof-new'() { profileDialog(null); },
     'prof-edit'(b) { profileDialog({ ...D().profiles[b.dataset.id] }); },
     'prof-default'(b) { saveSettings({ profileId: b.dataset.id }); toast('Default profile set'); rerender(); },
@@ -729,6 +770,20 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
       $('[data-x=no]', sh).onclick = closeModal;
       $('[data-x=yes]', sh).onclick = () => { const v = $('#memText').value.trim(); closeModal(); if (!v || v === x.value) return; const id = Model.memId(x.field, v); Store.remove('memory', x.id, { batch: true }); const cur = D().memory[id]; Store.put('memory', { id, field: x.field, value: v, uses: (x.uses || 1) + (cur && !cur.d ? cur.uses || 0 : 0), last: x.last, pinned: x.pinned, first: x.first }, { batch: true }); Store.commit(); rerender(); };
     },
+    'fb-analyse'() { analyseFeedback(); },
+    'fb-save'() { saveFeedback(); },
+    'fb-del'(b) { const f = D().feedback[b.dataset.id]; confirmBox('Delete this feedback?', 'Lessons made from it stay in Lessons learned.', 'Delete', () => { Store.remove('feedback', f.id); rerender(); }, true); },
+    'warn-add'(b) {
+      const l = D().lessons[b.dataset.id]; if (!l) return;
+      if (S.draft.type === 'review') { S.draft.inputs.prompt = String(S.draft.inputs.prompt || '').replace(/\s*$/, '') + '\n\n' + l.line; }
+      else { const cur = String(S.draft.inputs.extra || '').trim(); if (cur.includes(l.line)) return toast('Already in this prompt'); S.draft.inputs.extra = (cur ? cur + '\n' : '') + l.line; }
+      saveDraft(); rerender(); toast('Added to this prompt');
+    },
+    'lesson-new'() { lessonDialog(null); },
+    'lesson-edit'(b) { lessonDialog({ ...D().lessons[b.dataset.id] }); },
+    'lesson-mode'(b) { const l = D().lessons[b.dataset.id]; Store.put('lessons', { ...l, mode: l.mode === 'step' ? 'warn' : 'step' }); rerender(); },
+    'lesson-pause'(b) { const l = D().lessons[b.dataset.id]; Store.put('lessons', { ...l, active: l.active === false }); rerender(); },
+    'lesson-del'(b) { const l = D().lessons[b.dataset.id]; confirmBox('Delete this lesson?', `"${esc(l.title)}" stops applying on every synced device. Pause it instead if you may want it back.`, 'Delete', () => { Store.remove('lessons', l.id); rerender(); }, true); },
     'backup'() { doBackup(); },
     'xlsx'() { doXlsx(); },
     'csv'() { doCsv(); },
@@ -760,7 +815,7 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     window.addEventListener('hashchange', route);
     Store.on((kind, info) => {
       if (kind === 'change' && !(info && info.fromSync)) Sync.schedule();
-      if (kind === 'change' && info && info.fromSync) { if (S.route !== 'build') rerender(); else paintOut(); }
+      if (kind === 'change' && info && info.fromSync) { const a = document.activeElement; if (a && a.matches('input,textarea,select') && (a.closest('#panel') || a.closest('.modal'))) return; if (S.route !== 'build') rerender(); else paintOut(); }
       if (kind === 'save-error') { toast('Could not save on this device'); rerender(); }
     });
     let lastAlert = '';

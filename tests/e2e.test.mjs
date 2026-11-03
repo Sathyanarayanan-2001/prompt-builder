@@ -11,7 +11,6 @@ import { server } from '../scripts/serve.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = join(here, 'output'); mkdirSync(OUT, { recursive: true });
 const PORT = 8131; const URL0 = `http://localhost:${PORT}/`;
-const PM_ZIP = process.env.PM_ZIP || join(here, 'fixtures', 'pm_sample.zip');
 let browser;
 const errors = [];
 const outside = [];
@@ -130,26 +129,45 @@ test('quality Fix jumps to the field; review type adds a line', async () => {
   await ctx.close();
 });
 
-test('import Prompt Manager zip, re-import is a no-op, export reads back', async () => {
+test('feedback becomes lessons: a step in future prompts and a warning', async () => {
   const { ctx, p } = await page();
-  await p.goto(URL0 + '#library');
-  await p.click('.row [data-act=pm-import]');
-  await p.setInputFiles('#pmZip', PM_ZIP);
-  await p.waitForSelector('#pmGo', { timeout: 120000 });
-  const n = await p.locator('#pmPreview tbody tr').count();
-  assert.ok(n >= 2);
-  await p.click('#pmGo'); await p.waitForTimeout(200);
-  assert.equal(await count(p, 'builds'), n);
-  await p.click('.row [data-act=pm-import]');
-  await p.setInputFiles('#pmZip', PM_ZIP);
-  await p.waitForSelector('#pmGo', { timeout: 120000 });
-  assert.equal(await p.locator('#pmPreview .pill', { hasText: 'Already stored' }).count(), n);
-  assert.ok(await p.locator('#pmGo').isDisabled());
-  await p.click('[data-x=no]');
-  const f = await dl(p, '.row [data-act=pm-all]');
-  writeFileSync(join(OUT, 'pm-export-path.txt'), f);
-  writeFileSync(join(OUT, 'pm-import-titles.json'), JSON.stringify(await p.evaluate(() => Object.values(PB.Store.data.builds).filter(b => !b.d).map(b => b.title).sort())));
-  await p.screenshot({ path: join(OUT, 'library-light.png'), fullPage: true });
+  await p.goto(URL0 + '#build');
+  await p.click('[data-type=research]');
+  await p.fill('#f-topic', 'grid code compliance testing'); await p.waitForTimeout(200);
+  await p.locator('[data-act=save-version]').first().click(); await p.click('[data-x=yes]'); await p.waitForTimeout(150);
+  await p.click('[data-tab=feedback]');
+  await p.fill('#fbIssues', 'It asked me questions before starting.');
+  await p.fill('#fbResponse', 'Here are videos:\n| A | https://example.com/v |');
+  await p.click('[data-act=fb-analyse]');
+  assert.equal(await p.locator('[data-prop]').count(), 2);
+  await p.locator('[data-prop="1"] input[value=warn]').check();
+  await p.click('[data-act=fb-save]'); await p.waitForTimeout(150);
+  assert.equal(await count(p, 'lessons'), 2); assert.equal(await count(p, 'feedback'), 1);
+  // a new research prompt carries the step and shows the warning
+  await p.click('[data-act=new]');
+  await p.fill('#f-topic', 'tower foundation design'); await p.waitForTimeout(250);
+  await p.click('[data-tab=prompt]');
+  const txt = await p.locator('#promptText').textContent();
+  assert.match(txt, /LESSONS FROM EARLIER ANSWERS[\s\S]*Do not reply with questions/);
+  assert.equal(await p.locator('.status-line .pill', { hasText: '1 warning from past feedback' }).count(), 1);
+  await p.click('[data-tab=quality]');
+  await p.click('[data-act=warn-add]'); await p.waitForTimeout(150);
+  assert.match(await p.inputValue('#f-extra'), /Open every link/);
+  // reporting the same problem again counts it instead of duplicating
+  await p.locator('[data-act=save-version]').first().click(); await p.click('[data-x=yes]'); await p.waitForTimeout(150);
+  await p.click('[data-tab=feedback]');
+  await p.fill('#fbIssues', 'Again it kept asking questions.');
+  await p.click('[data-act=fb-analyse]');
+  assert.equal(await p.locator('.pill', { hasText: 'Seen before' }).count(), 1);
+  await p.click('[data-act=fb-save]'); await p.waitForTimeout(150);
+  assert.equal(await count(p, 'lessons'), 2);
+  assert.equal(await p.evaluate(() => Object.values(PB.Store.data.lessons).find(l => l.pattern === 'questions').seen), 2);
+  // pause from Saved inputs removes the step
+  await p.goto(URL0 + '#inputs');
+  await p.locator('#lessons .item', { hasText: 'Asked questions' }).locator('[data-act=lesson-pause]').click();
+  await p.goto(URL0 + '#build'); await p.click('[data-tab=prompt]');
+  assert.doesNotMatch(await p.locator('#promptText').textContent(), /Do not reply with questions/);
+  await p.goto(URL0 + '#inputs'); await p.screenshot({ path: join(OUT, 'lessons-light.png'), fullPage: true });
   await ctx.close();
 });
 
@@ -159,6 +177,7 @@ test('backup and restore in another browser; Excel and CSV exports', async () =>
   assert.equal(await p.locator('.banner.info', { hasText: 'Sample data is loaded' }).count(), 1);
   await p.goto(URL0 + '#setup');
   const backup = await dl(p, '[data-act=backup]');
+  await p.evaluate(() => PB.Store.put('lessons', { id: 'l_t', title: 'Test lesson', mode: 'step', scope: 'all', line: 'Step text', warning: '', seen: 1, active: true }));
   const xlsx = await dl(p, '[data-act=xlsx]');
   const csv = await dl(p, '[data-act=csv]');
   writeFileSync(join(OUT, 'exports.json'), JSON.stringify({ backup, xlsx, csv, builds: await count(p, 'builds'), versions: await count(p, 'versions') }));
@@ -262,6 +281,11 @@ test('phone widths: no sideways scroll, tab targets at least 44 px; every page i
         await p.screenshot({ path: join(OUT, `phone-${r}-${theme}.png`), fullPage: r !== 'build' });
       }
     }
+    await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); await p.click('[data-tab=feedback]');
+    await p.fill('#fbIssues', 'It asked questions and links were broken'); await p.click('[data-act=fb-analyse]');
+    const fo = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.ok(fo <= 0, `feedback tab at ${w}px scrolls sideways by ${fo}px`);
+    if (w === 320) await p.screenshot({ path: join(OUT, 'phone-feedback-320.png'), fullPage: true });
     await ctx.close();
   }
   const { ctx, p } = await page();
@@ -273,6 +297,28 @@ test('phone widths: no sideways scroll, tab targets at least 44 px; every page i
   }
   await p.goto(URL0 + '#build'); await p.click('[data-tab=thinking]');
   await p.screenshot({ path: join(OUT, 'desk-thinking-dark.png') });
+  await ctx.close();
+});
+
+test('optional: a restored backup reopens every prompt exactly as saved (set RESTORE_CHECK to a backup file)', { skip: !process.env.RESTORE_CHECK }, async () => {
+  const { ctx, p } = await page();
+  await p.goto(URL0 + '#setup');
+  await p.setInputFiles('#restoreFile', process.env.RESTORE_CHECK); await p.waitForTimeout(400);
+  const ids = await p.evaluate(() => Object.values(PB.Store.data.builds).filter(b => !b.d).map(b => b.id));
+  assert.ok(ids.length > 0);
+  for (const id of ids) {
+    await p.goto(URL0 + '#library'); await p.locator(`[data-act=open][data-id="${id}"]`).click(); await p.waitForTimeout(250);
+    assert.equal(await p.locator('.status-line .pill', { hasText: 'Unsaved changes' }).count(), 0, 'prompt differs from its saved version: ' + id);
+    const same = await p.evaluate(() => { const v = Object.values(PB.Store.data.versions).filter(x => x.buildId === PB.S.draft.buildId).sort((a, b) => b.at - a.at)[0]; return v.prompt === PB.S.out.prompt; });
+    assert.ok(same, 'regenerated prompt text matches the stored version for ' + id);
+  }
+  await p.goto(URL0 + '#library'); await p.screenshot({ path: join(OUT, 'restored-library.png'), fullPage: true });
+  await p.locator('[data-act=open]').first().click(); await p.click('[data-tab=versions]');
+  if (await p.locator('#panel .item').count() > 1) { // compare the original (v1) with the current prompt
+    await p.locator('#panel .item').nth(1).locator('[data-act=v-diff]').click();
+    assert.ok(await p.locator('.diff .plus').count() > 5);
+    await p.screenshot({ path: join(OUT, 'restored-diff.png') });
+  }
   await ctx.close();
 });
 

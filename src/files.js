@@ -1,5 +1,5 @@
-/* File formats written by hand (no libraries): zip read/write, xlsx, CSV,
-   and the Prompt Manager folder format. Exposes `Files`. */
+/* File formats written by hand (no libraries): zip writer, xlsx, CSV, gzip.
+   Exposes `Files`. */
 'use strict';
 const Files = (() => {
   const enc = new TextEncoder();
@@ -45,103 +45,7 @@ const Files = (() => {
     return out;
   }
 
-  // List entries of a zip (reads the central directory; supports zip64 offsets).
-  function zipList(u8) {
-    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-    let eocd = -1;
-    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) throw new Error('This file is not a zip archive.');
-    let count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
-    if ((count === 0xffff || cdOff === 0xffffffff) && eocd >= 20 && dv.getUint32(eocd - 20, true) === 0x07064b50) {
-      const z = Number(dv.getBigUint64(eocd - 12, true));
-      count = Number(dv.getBigUint64(z + 32, true)); cdOff = Number(dv.getBigUint64(z + 48, true));
-    }
-    const list = [];
-    let p = cdOff;
-    for (let i = 0; i < count; i++) {
-      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('The zip directory is damaged.');
-      const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true);
-      let csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
-      const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
-      let loff = dv.getUint32(p + 42, true);
-      const nameBytes = u8.subarray(p + 46, p + 46 + nlen);
-      const name = (flags & 0x0800 ? dec : new TextDecoder('utf-8')).decode(nameBytes).replace(/\\/g, '/');
-      let x = p + 46 + nlen; const xe = x + xlen;
-      while (x + 4 <= xe) {
-        const id = dv.getUint16(x, true), sz = dv.getUint16(x + 2, true);
-        if (id === 1) { let q = x + 4; if (usize === 0xffffffff) { usize = Number(dv.getBigUint64(q, true)); q += 8; } if (csize === 0xffffffff) { csize = Number(dv.getBigUint64(q, true)); q += 8; } if (loff === 0xffffffff) { loff = Number(dv.getBigUint64(q, true)); } }
-        x += 4 + sz;
-      }
-      list.push({ name, method, csize, usize, loff });
-      p += 46 + nlen + xlen + clen;
-    }
-    return list;
-  }
-
-  async function inflateRaw(bytes) {
-    if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot unzip compressed files. Use the folder import instead.');
-    const ds = new DecompressionStream('deflate-raw');
-    const out = new Response(new Blob([bytes]).stream().pipeThrough(ds));
-    return new Uint8Array(await out.arrayBuffer());
-  }
-
-  async function zipRead(u8, entry) {
-    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-    const p = entry.loff;
-    if (dv.getUint32(p, true) !== 0x04034b50) throw new Error('Damaged zip entry: ' + entry.name);
-    const start = p + 30 + dv.getUint16(p + 26, true) + dv.getUint16(p + 28, true);
-    const raw = u8.subarray(start, start + entry.csize);
-    if (entry.method === 0) return raw.slice();
-    if (entry.method === 8) return inflateRaw(raw);
-    throw new Error('Unsupported compression in ' + entry.name);
-  }
-
-  // ---------------------------------------------------------------- Prompt Manager format
   const safeFolder = t => String(t).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/^[ .]+|[ .]+$/g, '');
-
-  // records: [{title, prompt, thinking, tags}] -> zip entries under prompt_repository/<title>/
-  function pmEntries(records) {
-    const used = new Set();
-    return records.flatMap(r => {
-      let base = safeFolder(r.title) || 'Untitled prompt';
-      if (base.startsWith('_')) base = 'Prompt ' + base;
-      let name = base, i = 2; while (used.has(name.toLowerCase())) name = `${base} (${i++})`;
-      used.add(name.toLowerCase());
-      const dir = `prompt_repository/${name}/`;
-      return [
-        { name: dir + 'prompt.txt', data: r.prompt || '' },
-        { name: dir + 'thinking.txt', data: r.thinking || '' },
-        { name: dir + 'metadata.json', data: JSON.stringify({ tags: r.tags || [] }, null, 2) + '\n' },
-      ];
-    });
-  }
-
-  // Given paths, find prompt folders: .../<folder>/(prompt|thinking).(txt|md) + metadata.json
-  function pmGroups(paths) {
-    const groups = new Map();
-    for (const path of paths) {
-      const parts = path.split('/').filter(Boolean);
-      if (parts.length < 2) continue;
-      if (parts.some(s => s === '.venv' || s === 'node_modules' || s === '__pycache__' || s === '_legacy_backup' || s === '__MACOSX')) continue;
-      const file = parts[parts.length - 1].toLowerCase();
-      const folder = parts[parts.length - 2];
-      if (folder.startsWith('_') || folder.startsWith('.')) continue;
-      let role = null;
-      if (file === 'prompt.txt' || file === 'prompt.md') role = 'prompt';
-      else if (file === 'thinking.txt' || file === 'thinking.md') role = 'thinking';
-      else if (file === 'metadata.json') role = 'meta';
-      if (!role) continue;
-      const key = parts.slice(0, -1).join('/');
-      if (!groups.has(key)) groups.set(key, { title: folder, key });
-      const g = groups.get(key);
-      if (!g[role] || /\.txt$/.test(file)) g[role] = path;
-    }
-    return [...groups.values()].filter(g => g.prompt).sort((a, b) => a.title.localeCompare(b.title));
-  }
-
-  function parseMeta(text) {
-    try { const j = JSON.parse(text); return Array.isArray(j.tags) ? j.tags.map(t => String(t).trim()).filter(Boolean) : []; } catch { return []; }
-  }
 
   // ---------------------------------------------------------------- CSV
   function csvCell(v) { const s = v == null ? '' : String(v); return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -183,6 +87,6 @@ const Files = (() => {
     return dec.decode(await new Response(s).arrayBuffer());
   }
 
-  return { crc32, zip, zipList, zipRead, pmEntries, pmGroups, parseMeta, safeFolder, csv, xlsx, gzip, gunzip, enc, dec };
+  return { crc32, zip, safeFolder, csv, xlsx, gzip, gunzip, enc, dec };
 })();
 if (typeof module !== 'undefined') module.exports = Files;
