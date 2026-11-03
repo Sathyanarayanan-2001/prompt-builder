@@ -233,8 +233,8 @@ ${T.profile ? `<div class="card" style="gap:10px"><div class="row spread"><h3>Pr
 <div class="row"><select id="f-profile" data-opt="profileId" style="flex:1;min-width:180px"><option value="">No profile</option>${profiles.map(p => `<option value="${esc(p.id)}"${p.id === d.profileId ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
 <label class="check"><input type="checkbox" id="f-useProfile" data-opt="useProfile"${d.options.useProfile !== false ? ' checked' : ''}> Include in prompt</label></div>
 ${profiles.length ? '' : '<p class="small muted">No profile yet. Add one in Saved inputs so your name, currency and financial year go in automatically.</p>'}</div>` : ''}
-${T.groups.map(([g, keys], gi) => `<details class="group" ${gi === 0 || keys.some(k => String(d.inputs[k] || '').trim() && k !== 'unclear') ? 'open' : ''}><summary><span>${esc(g)}</span><span class="count">${keys.filter(k => String(d.inputs[k] || '').trim() && k !== 'unclear').length} of ${keys.length} filled</span></summary><div class="group-body">${keys.map(k => fieldHTML(k, T)).join('')}</div></details>`).join('')}
-<details class="group"><summary><span>Prompt options</span><span class="count">${esc(Engine.STYLES[d.options.style] || 'Plain headings')}</span></summary><div class="group-body">
+${T.groups.map(([g, keys], gi) => `<details class="group" data-group="${esc(g)}" ${isOpen(g, gi === 0 || keys.some(k => String(d.inputs[k] || '').trim() && k !== 'unclear')) ? 'open' : ''}><summary><span>${esc(g)}</span><span class="count">${keys.filter(k => String(d.inputs[k] || '').trim() && k !== 'unclear').length} of ${keys.length} filled</span></summary><div class="group-body">${keys.map(k => fieldHTML(k, T)).join('')}</div></details>`).join('')}
+<details class="group" data-group="Prompt options" ${isOpen('Prompt options', (d.tags || []).length > 0) ? 'open' : ''}><summary><span>Prompt options</span><span class="count">${esc(Engine.STYLES[d.options.style] || 'Plain headings')}</span></summary><div class="group-body">
 <label class="f"><span class="f-head"><span class="f-name">Prompt layout</span></span><select id="f-style" data-opt="style">${Object.entries(Engine.STYLES).map(([k, v]) => `<option value="${k}"${d.options.style === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select><span class="f-hint">Plain headings match your ledger prompts; XML tags suit long prompts with several parts.</span></label>
 ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="checkbox" id="f-chatOnly" data-opt="chatOnly"${d.options.chatOnly ? ' checked' : ''}> Add the chat-only fallback (send files one at a time and wait for "continue")</label>` : ''}
 <label class="f"><span class="f-head"><span class="f-name">Tags</span><button type="button" class="mem-btn" data-act="mem" data-field="tags">Previous</button></span><input id="f-tags" data-opt="tags" value="${esc((d.tags || []).join(', '))}" placeholder="finance, web-app, github"><span class="f-hint">Comma separated. Used to filter the Library.</span></label>
@@ -245,6 +245,7 @@ ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="c
     paintOut();
   }
 
+  function isOpen(g, dflt) { const v = (S.openGroups || {})[S.draft.type + ':' + g]; return v === undefined ? dflt : v; }
   function fieldHTML(k, T) {
     const f = Engine.F[k]; const d = S.draft; const v = d.inputs[k] == null ? '' : d.inputs[k];
     const req = T.required.includes(k) ? '<span class="req" title="Required">*</span>' : '';
@@ -608,7 +609,7 @@ ${Sync.supported ? `<p>Pick a folder inside OneDrive. This device writes one sav
 </section>
 <section class="card"><h2>Your data</h2>
 <div class="row"><button class="btn" data-act="backup">Download backup</button><label class="btn" for="restoreFile">Restore from backup</label><input type="file" id="restoreFile" accept=".json,application/json" hidden></div>
-<p class="small muted">Restore merges a backup into this device: newer records win, nothing is deleted.</p>
+<p class="small muted">Restore shows what a backup will add or update before anything changes, never deletes, and can bring back items you deleted here.</p>
 <div class="row"><button class="btn" data-act="xlsx">Export everything to Excel</button><button class="btn" data-act="csv">Export library to CSV</button></div>
 <div class="row"><button class="btn" data-act="sample-load">Load sample data</button><button class="btn" data-act="sample-remove">Remove sample data</button></div>
 <p class="small muted">Stored on this device in ${Store.mode === 'idb' ? 'browser storage (IndexedDB)' : '<b>memory only</b>; download a backup before closing'}: ${live('builds').length} prompts, ${live('versions').length} versions, ${live('memory').length} saved entries, ${profiles.length} profiles.</p>
@@ -628,15 +629,42 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
 
   // ---------------------------------------------------------------- data tools
   function doBackup() { download(`Prompt_Builder_Backup_${stampName()}.json`, JSON.stringify(Model.backupBlob(D()), null, 1), 'application/json'); Prefs.set('lastBackup', Date.now()); }
+  const KIND = { builds: ['prompt', 'prompts'], versions: ['version', 'versions'], memory: ['saved entry', 'saved entries'], profiles: ['profile', 'profiles'], lessons: ['lesson', 'lessons'], feedback: ['feedback note', 'feedback notes'], cfg: ['setting', 'settings'] };
+  function kindList(pairs) {
+    const n = {}; pairs.forEach(([c]) => (n[c] = (n[c] || 0) + 1));
+    return Model.COLLECTIONS.filter(c => n[c]).map(c => `${n[c]} ${KIND[c][n[c] === 1 ? 0 : 1]}`).join(', ');
+  }
   async function doRestore(file) {
-    try {
-      const obj = JSON.parse(await file.text());
-      const inc = Model.readBackup(obj);
-      const m = Model.merge(D(), inc);
-      if (m.localChanged) { Store.replace(m.data); Sync.schedule(); }
-      toast(m.localChanged ? 'Backup merged into this device' : 'Nothing new in that backup');
+    let inc;
+    try { inc = Model.readBackup(JSON.parse(await file.text())); }
+    catch (e) { toast(e instanceof SyntaxError ? 'That file is not valid JSON.' : e.message); return; }
+    const plan = Model.restorePlan(D(), inc);
+    const fresh = plan.add.length + plan.update.length;
+    const rows = [];
+    if (plan.add.length) rows.push(`<li><b>New here:</b> ${esc(kindList(plan.add))}</li>`);
+    if (plan.update.length) rows.push(`<li><b>Newer in the backup:</b> ${esc(kindList(plan.update))}</li>`);
+    if (plan.revive.length) rows.push(`<li><b>Deleted on this device:</b> ${esc(kindList(plan.revive))}</li>`);
+    if (plan.keptNewer) rows.push(`<li><b>Kept as they are</b> (changed here after the backup): ${plan.keptNewer}</li>`);
+    if (plan.same) rows.push(`<li><b>Already the same:</b> ${plan.same}</li>`);
+    if (plan.ignoredDeletions) rows.push(`<li><b>Deletions in the backup ignored:</b> ${plan.ignoredDeletions} (restore never deletes)</li>`);
+    const nothing = !fresh && !plan.revive.length;
+    const sh = modal(`<h2>Restore ${esc(file.name)}</h2>
+${nothing ? '<p>This device already has everything in this backup, at the same or a newer version. Nothing to restore.</p>' : '<p>Restore adds and updates; it never deletes anything here.</p>'}
+<ul class="stack" style="margin:0;padding-left:20px">${rows.join('') || '<li>The backup is empty.</li>'}</ul>
+${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive" checked> Bring back the ${plan.revive.length} item${plan.revive.length === 1 ? '' : 's'} I deleted on this device</label><p class="small muted">They come back on your other synced devices too.</p>` : ''}
+<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">${nothing ? 'Close' : 'Cancel'}</button>${nothing ? '' : '<button class="btn primary" data-x="yes">Restore</button>'}</div>`);
+    $('[data-x=no]', sh).onclick = closeModal;
+    const go = $('[data-x=yes]', sh);
+    if (go) go.onclick = () => {
+      const revive = !!($('#rsRevive') && $('#rsRevive').checked);
+      const n = fresh + (revive ? plan.revive.length : 0);
+      closeModal();
+      if (!n) { toast('Nothing restored'); return; }
+      Store.replace(Model.applyRestore(D(), inc, plan, revive, Model.nextU));
+      if (S.draft.profileId && !profileOf(S.draft.profileId)) { S.draft.profileId = ''; saveDraft(); }
+      toast(`Restored ${n} item${n === 1 ? '' : 's'}`);
       rerender();
-    } catch (e) { toast(e instanceof SyntaxError ? 'That file is not valid JSON.' : e.message); }
+    };
   }
   function libraryRows() {
     return live('builds').sort((a, b) => a.title.localeCompare(b.title)).map(b => { const v = latestVersion(b.id) || {}; return [b.title, Engine.T[b.type] ? Engine.T[b.type].name : b.type, (b.tags || []).join(', '), versionsOf(b.id).length, v.score == null ? '' : v.score, v.prompt ? words(v.prompt) : 0, fmtDate(b.u), v.prompt || '', v.thinking || '']; });
@@ -742,7 +770,7 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     'mem'(b) { if (popEl && popEl.dataset.field === b.dataset.field) return closePop(); openPop(b, b.dataset.field); popEl.dataset.field = b.dataset.field; },
     'fix'(b) {
       const k = b.dataset.field; const det = $('#f-' + k) && $('#f-' + k).closest('details'); if (det) det.open = true;
-      const el = $('#f-' + k); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus(); const mb = el.closest('label').querySelector('.mem-btn'); if (mb && !String(S.draft.inputs[k] || '').trim()) setTimeout(() => ACT.mem(mb), 350); }
+      const el = $('#f-' + k); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus(); const mb = el.closest('label').querySelector('.mem-btn'); if (mb && !String(S.draft.inputs[k] || '').trim() && (memFor(k).length || (Engine.F[k].sug || []).length)) setTimeout(() => ACT.mem(mb), 350); }
     },
     'append-fix'(b) {
       const c = Engine.CHECKS.find(x => x.id === b.dataset.check);
@@ -811,6 +839,7 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
     document.addEventListener('input', onInput);
     document.addEventListener('change', onChange);
     document.addEventListener('click', onClick);
+    document.addEventListener('toggle', e => { const g = e.target; if (g.matches && g.matches('details[data-group]')) { S.openGroups = S.openGroups || {}; S.openGroups[S.draft.type + ':' + g.dataset.group] = g.open; } }, true);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePop(); closeModal(); } });
     window.addEventListener('hashchange', route);
     Store.on((kind, info) => {
