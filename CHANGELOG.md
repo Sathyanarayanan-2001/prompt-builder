@@ -2,6 +2,21 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0] - 2026-11-03
+
+### Changed
+- Setup is a settings list: each row has its name and explanation on the left and its control on the right, on one line; rows stack cleanly on phones. Fixes the Install button sitting out of line with the Appearance list.
+- Labelled controls placed side by side share a bottom edge (Build profile row, Feedback version and result).
+- Feedback result and lesson mode use segmented controls.
+- Item actions (Library, versions, lessons, profiles, saved entries) form one right-aligned group with Delete set apart; on phones they fill the row.
+- Dialogs keep their buttons visible while the content scrolls, and open as bottom sheets on phones.
+- Phones get an Inputs / Prompt switch on Build, so the prompt is one tap away instead of below every field.
+- Saved entries are grouped in collapsible sections with counts; open sections stay open.
+- Touch screens get 44 px controls; correct singular and plural counts on Setup.
+
+### Added
+- Automated layout checks on every page, desktop and phone, light and dark: aligned controls, labelled inputs, WCAG AA text contrast, 44 px touch targets.
+
 ## [1.1.1] - 2026-11-03
 
 ### Fixed
