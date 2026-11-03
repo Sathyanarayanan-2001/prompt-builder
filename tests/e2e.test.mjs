@@ -62,6 +62,7 @@ const restore = async (p, file, revive = true) => {
   if (await p.locator('.modal [data-x=yes]').count()) await p.click('.modal [data-x=yes]'); else await p.click('.modal [data-x=no]');
   await p.waitForTimeout(200);
 };
+const openGroups = p => p.evaluate(() => document.querySelectorAll('details.mem-group').forEach(d => { d.open = true; }));
 const count = (p, coll) => p.evaluate(c => Object.values(PB.Store.data[c]).filter(r => !r.d).length, coll);
 
 test('first visit opens Start and the chip says This device only', async () => {
@@ -296,7 +297,7 @@ test('phone widths: no sideways scroll, tab targets at least 44 px; every page i
         await p.screenshot({ path: join(OUT, `phone-${r}-${theme}.png`), fullPage: r !== 'build' });
       }
     }
-    await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); await p.click('[data-tab=feedback]');
+    await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); await p.click('[data-act=mview][data-v=output]'); await p.click('[data-tab=feedback]');
     await p.fill('#fbIssues', 'It asked questions and links were broken'); await p.click('[data-act=fb-analyse]');
     const fo = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(fo <= 0, `feedback tab at ${w}px scrolls sideways by ${fo}px`);
@@ -329,7 +330,7 @@ test('restore after deleting: deleted items come back only when asked; restore n
   await restore(p, file);
   assert.deepEqual({ b: await count(p, 'builds'), m: await count(p, 'memory'), p: await count(p, 'profiles') }, full);
   // the user's scenario: delete saved entries, a profile and a prompt, then restore the same file
-  await p.goto(URL0 + '#inputs');
+  await p.goto(URL0 + '#inputs'); await openGroups(p);
   while (await p.locator('[data-act=mem-del]').count()) { await p.locator('[data-act=mem-del]').first().click(); await p.waitForTimeout(60); }
   await p.locator('[data-act=prof-del]').first().click(); await p.click('[data-x=yes]');
   await p.goto(URL0 + '#library');
@@ -418,7 +419,8 @@ test('every button works: audit of all actions', async () => {
   assert.equal(await p.evaluate(() => Object.values(PB.Store.data.lessons)[0].mode), 'warn');
   await p.locator('#lessons .item', { hasText: 'Use rupees' }).locator('[data-act=lesson-del]').click(); await p.click('[data-x=yes]');
   assert.equal(await count(p, 'lessons'), 0);
-  // saved entries: pin, edit, delete
+  // saved entries: pin, edit, delete (groups are collapsed until opened)
+  await openGroups(p);
   await p.locator('.item', { hasText: 'Audit tool' }).locator('[data-act=mem-pin]').first().click();
   assert.equal(await p.locator('.item', { hasText: 'Audit tool' }).locator('.pill', { hasText: 'Pinned' }).count(), 1);
   await p.locator('.item', { hasText: 'Audit tool' }).locator('[data-act=mem-edit]').first().click(); await p.fill('#memText', 'Audit tool v2'); await p.click('[data-x=yes]');
@@ -450,6 +452,74 @@ test('every button works: audit of all actions', async () => {
   const csvF = await dl(p, '[data-act=csv]'); assert.ok(readFileSync(csvF, 'utf8').startsWith('\ufeffTitle,'));
   assert.ok(await p.locator('[data-act=install]').isDisabled());
   await ctx.close();
+});
+
+test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch targets', async () => {
+  const audit = async p => p.evaluate(() => {
+    const out = { misaligned: [], unlabelled: [], lowContrast: [] };
+    const lum = c => { const m = c.match(/[\d.]+/g).map(Number); const [r, g, b] = m.slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const bgOf = el => { while (el) { const c = getComputedStyle(el).backgroundColor; if (c && !/rgba\(.*, 0\)|transparent/.test(c)) return c; el = el.parentElement; } return getComputedStyle(document.body).backgroundColor; };
+    const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    // controls placed side by side in one row share their bottom edge
+    for (const row of document.querySelectorAll('.set-ctl, .form-row:not(.form-row-check), .modal-foot, .acts')) {
+      const ctl = [...row.querySelectorAll(':scope > .btn, :scope > select, :scope > .f select, :scope > .f input, :scope > .seg-field .seg')].filter(vis);
+      const byLine = {}; ctl.forEach(c => { const r = c.getBoundingClientRect(); const k = Math.round(r.top / 30); (byLine[k] = byLine[k] || []).push(r.bottom); });
+      for (const b of Object.values(byLine)) if (Math.max(...b) - Math.min(...b) > 2) out.misaligned.push(row.className + ' ' + (row.closest('[id],section')?.querySelector('h2,h3')?.textContent || ''));
+    }
+    // every visible form control has an accessible name
+    for (const el of document.querySelectorAll('input:not([type=hidden]):not([type=file]), select, textarea')) {
+      if (!vis(el) && el.type !== 'radio') continue;
+      const named = el.labels?.length || el.getAttribute('aria-label') || el.closest('label');
+      if (!named) out.unlabelled.push(el.id || el.name || el.outerHTML.slice(0, 60));
+    }
+    // text contrast: 4.5:1 for body-size text
+    for (const el of document.querySelectorAll('p, span, label, h1, h2, h3, .btn, .tab, .otab, td, th, .pill, .set-hint, .f-hint, .meta, .mem-btn')) {
+      if (!vis(el) || !el.textContent.trim() || el.closest('[disabled], .btn:disabled, .shade')) continue;
+      const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity < 1) continue;
+      const a = lum(cs.color), b = lum(bgOf(el)); const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      if (ratio < 4.5) out.lowContrast.push(`${ratio.toFixed(2)} ${el.tagName}.${el.className} "${el.textContent.trim().slice(0, 30)}"`);
+    }
+    return out;
+  });
+  { // the checks themselves must catch planted faults
+    const { ctx, p } = await page();
+    await p.goto(URL0 + '#setup');
+    await p.evaluate(() => {
+      const ctl = document.querySelector('.set-ctl'); const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Off'; b.style.marginBottom = '12px'; ctl.appendChild(b);
+      const i = document.createElement('input'); i.id = 'naked'; document.querySelector('.settings').appendChild(i);
+      const q = document.createElement('p'); q.textContent = 'faint text'; q.style.color = '#cfd6d4'; document.querySelector('.settings').appendChild(q);
+    });
+    const a = await audit(p);
+    assert.equal(a.misaligned.length, 1); assert.deepEqual(a.unlabelled, ['naked']); assert.equal(a.lowContrast.length, 1);
+    await ctx.close();
+  }
+  for (const [vp, extra] of [[{ width: 1360, height: 900 }, {}], [{ width: 390, height: 844 }, { hasTouch: true, isMobile: true }]]) {
+    for (const theme of ['light', 'dark']) {
+      const { ctx, p } = await page({ viewport: vp, ...extra });
+      await p.click('[data-act=sample-load]');
+      await p.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
+      const views = [['start'], ['library'], ['inputs'], ['setup'], ['build', 'prompt'], ['build', 'quality'], ['build', 'feedback']];
+      for (const [r, tab] of views) {
+        await p.goto(URL0 + '#' + r); await p.waitForTimeout(120);
+        await p.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
+        if (r === 'build' && tab) {
+          if (await p.locator('.mview').isVisible()) await p.click('[data-act=mview][data-v=output]');
+          if (tab === 'feedback') { await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); if (await p.locator('.mview').isVisible()) await p.click('[data-act=mview][data-v=output]'); }
+          await p.click(`[data-tab=${tab}]`); await p.waitForTimeout(80);
+        }
+        const a = await audit(p);
+        const where = `${r}${tab ? '/' + tab : ''} at ${vp.width}px ${theme}`;
+        assert.deepEqual(a.misaligned, [], 'misaligned controls on ' + where);
+        assert.deepEqual(a.unlabelled, [], 'unlabelled inputs on ' + where);
+        assert.deepEqual(a.lowContrast, [], 'low contrast on ' + where);
+        if (extra.hasTouch) {
+          const small = await p.evaluate(() => [...document.querySelectorAll('.btn:not(.sm), .tab, .otab, select, input[type=search]')].filter(e => { const b = e.getBoundingClientRect(); return b.width && b.height && b.height < 44; }).map(e => e.textContent.trim().slice(0, 20) || e.id));
+          assert.deepEqual(small, [], 'touch targets under 44 px on ' + where);
+        }
+      }
+      await ctx.close();
+    }
+  }
 });
 
 test('optional: a restored backup reopens every prompt exactly as saved (set RESTORE_CHECK to a backup file)', { skip: !process.env.RESTORE_CHECK }, async () => {

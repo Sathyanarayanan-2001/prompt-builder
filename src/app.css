@@ -209,7 +209,62 @@ dl.defs dt { font-weight: 600; }
 dl.defs dd { margin: 0; color: var(--muted); max-width: 70ch; }
 kbd, code { font-family: var(--f-mono); font-size: .85em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
 
+/* page header */
+.page-head { display: grid; gap: 4px; }
+.page-head p { max-width: 70ch; }
+
+/* settings rows: label + hint left, control right, one shared baseline */
+.settings { gap: 0; padding-bottom: 6px; }
+.settings > h2 { margin-bottom: 8px; }
+.settings > p.small { margin-bottom: 6px; max-width: 75ch; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+.set-text { display: grid; gap: 2px; min-width: 0; }
+.set-title { font-weight: 600; }
+.set-title label { cursor: pointer; }
+.set-hint { font-size: .85rem; color: var(--muted); max-width: 62ch; }
+.set-ctl { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.set-ctl select { width: 260px; max-width: 100%; }
+.settings > p.set-foot { max-width: none; padding-top: 12px; margin-bottom: 0; border-top: 1px solid var(--line); }
+
+/* labelled controls that sit side by side line up on their bottom edge */
+.form-row { display: flex; gap: 12px 16px; flex-wrap: wrap; align-items: flex-end; }
+.form-row > .f, .form-row > select { flex: 1 1 200px; min-width: 0; }
+.form-row-check { align-items: center; }
+.form-row-check > select { flex: 1 1 220px; }
+fieldset.f { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.f > legend { padding: 0; margin-bottom: 4px; }
+.seg-field { flex: 2 1 280px !important; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; background: var(--raise); }
+.seg-opt { position: relative; display: flex; }
+.seg-opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg-opt span { display: flex; align-items: center; min-height: 38px; padding: 0 14px; font-size: .9rem; color: var(--muted); border-left: 1px solid var(--line); }
+.seg-opt:first-child span { border-left: 0; }
+.seg-opt input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg-opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -3px; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0 12px; }
+
+/* item actions: one aligned group, destructive action set apart */
+.acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.acts .danger { margin-left: 8px; }
+.list.flush { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.mem-group > summary .count { font-variant-numeric: tabular-nums; }
+.filters.cols-2 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+
+/* dialogs: footer stays visible while the body scrolls */
+.modal { padding-bottom: 0; }
+.modal-foot { position: sticky; bottom: 0; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 0 18px; margin-top: 4px; background: var(--surface); border-top: 1px solid var(--line); }
+
+/* phone switch between inputs and prompt */
+.mview { display: none; }
+
 @media (max-width: 1060px) {
+  .mview { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--raise); border: 1px solid var(--line); border-radius: 9px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); z-index: 15; }
+  .mview-btn { border: 0; background: none; min-height: 40px; border-radius: 6px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .mview-btn[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+  .mview-score { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .mview-score:not(:empty)::before { content: '· '; }
+  .bench[data-mview="inputs"] > .out { display: none; }
+  .bench[data-mview="output"] > .inputs { display: none; }
   .bench { grid-template-columns: minmax(0, 1fr); }
   .out { position: static; max-height: none; grid-template-rows: auto; }
   .panel { max-height: 80vh; }
@@ -224,10 +279,34 @@ kbd, code { font-family: var(--f-mono); font-size: .85em; background: var(--code
   .top-tools { margin-left: auto; }
   main { padding-block: 16px 96px; }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
-  .filters, .two, .piles { grid-template-columns: minmax(0, 1fr); }
+  .filters, .filters.cols-2, .two, .piles { grid-template-columns: minmax(0, 1fr); }
+  .set-row { grid-template-columns: minmax(0, 1fr); }
+  .set-ctl { justify-content: flex-start; }
+  .set-ctl select { width: 100%; }
+  .acts { justify-content: flex-start; }
+  .acts .btn { flex: 1 1 auto; justify-content: center; }
+  .acts .danger { margin-left: 0; }
+  .seg { display: flex; width: 100%; }
+  .seg-opt { flex: 1 1 auto; }
+  .seg-opt span { justify-content: center; width: 100%; padding: 0 8px; }
+  .shade { align-items: end; padding: 0; }
+  .modal { width: 100%; max-height: 92vh; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .modal-foot .btn { flex: 1 1 auto; justify-content: center; }
   .item { grid-template-columns: minmax(0, 1fr); }
   .checks li { grid-template-columns: minmax(0, 1fr); }
   .checks .why { grid-column: auto; }
   h1 { font-size: 1.45rem; }
 }
+/* touch screens: comfortable targets (44 px for main controls) */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn.sm { min-height: 40px; padding-inline: 12px; }
+  input[type=text], input[type=search], input:not([type]), select { min-height: 44px; }
+  .mem-btn { min-height: 36px; padding-inline: 10px; }
+  .seg-opt span { min-height: 42px; }
+  .otab { min-height: 48px; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+/* collapsible sections show their state */
+details.group > summary > span:first-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 10px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform .15s; vertical-align: 2px; opacity: .6; }
+details.group[open] > summary > span:first-child::before { transform: rotate(45deg); vertical-align: 4px; }

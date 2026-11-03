@@ -100,7 +100,7 @@
   }
   function closeModal() { const m = $('#shade'); if (m) m.remove(); }
   function confirmBox(title, text, okLabel, fn, danger) {
-    const sh = modal(`<h2>${esc(title)}</h2><p>${text}</p><div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" data-x="yes">${esc(okLabel)}</button></div>`);
+    const sh = modal(`<h2>${esc(title)}</h2><p>${text}</p><div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" data-x="yes">${esc(okLabel)}</button></div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     $('[data-x=yes]', sh).onclick = () => { closeModal(); fn(); };
   }
@@ -227,10 +227,13 @@
 <div class="row spread"><div class="stack" style="gap:2px;min-width:0"><span class="eyebrow">${b ? 'Editing saved prompt' : 'New prompt'}</span><h1 id="bTitle" style="overflow-wrap:anywhere">${esc(d.inputs.title || d.inputs.topic || d.inputs.docname || d.inputs.dataset || d.inputs.piecetype || 'Untitled prompt')}</h1></div>
 <div class="row"><button class="btn" data-act="new">New prompt</button><button class="btn primary" data-act="save-version">Save version</button></div></div>
 <div class="types" role="group" aria-label="Kind of request">${Engine.TYPE_ORDER.map(t => `<button class="type" data-act="type" data-type="${t}" aria-pressed="${t === d.type}">${esc(Engine.T[t].name)}</button>`).join('')}</div>
-<div class="bench">
+<div class="mview" role="tablist" aria-label="Show">
+<button class="mview-btn" role="tab" data-act="mview" data-v="inputs" aria-selected="${S.mview !== 'output'}">Inputs</button>
+<button class="mview-btn" role="tab" data-act="mview" data-v="output" aria-selected="${S.mview === 'output'}">Prompt <span class="mview-score" id="mviewScore"></span></button></div>
+<div class="bench" data-mview="${S.mview === 'output' ? 'output' : 'inputs'}">
 <form class="inputs" id="form" autocomplete="off" onsubmit="return false">
-${T.profile ? `<div class="card" style="gap:10px"><div class="row spread"><h3>Profile</h3><a class="small" href="#inputs">Manage profiles</a></div>
-<div class="row"><select id="f-profile" data-opt="profileId" style="flex:1;min-width:180px"><option value="">No profile</option>${profiles.map(p => `<option value="${esc(p.id)}"${p.id === d.profileId ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
+${T.profile ? `<div class="card" style="gap:10px"><div class="row spread"><h3>Profile</h3><a class="btn ghost sm" href="#inputs">Manage profiles</a></div>
+<div class="form-row form-row-check"><select id="f-profile" data-opt="profileId" aria-label="Profile"><option value="">No profile</option>${profiles.map(p => `<option value="${esc(p.id)}"${p.id === d.profileId ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
 <label class="check"><input type="checkbox" id="f-useProfile" data-opt="useProfile"${d.options.useProfile !== false ? ' checked' : ''}> Include in prompt</label></div>
 ${profiles.length ? '' : '<p class="small muted">No profile yet. Add one in Saved inputs so your name, currency and financial year go in automatically.</p>'}</div>` : ''}
 ${T.groups.map(([g, keys], gi) => `<details class="group" data-group="${esc(g)}" ${isOpen(g, gi === 0 || keys.some(k => String(d.inputs[k] || '').trim() && k !== 'unclear')) ? 'open' : ''}><summary><span>${esc(g)}</span><span class="count">${keys.filter(k => String(d.inputs[k] || '').trim() && k !== 'unclear').length} of ${keys.length} filled</span></summary><div class="group-body">${keys.map(k => fieldHTML(k, T)).join('')}</div></details>`).join('')}
@@ -271,6 +274,7 @@ ${vs.length ? `<span>v${vs[0].n} saved ${esc(fmtDate(vs[0].at))}</span>` : '<spa
 ${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequired.join(', '))}</span>` : ''}${r.warnings.length ? `<button class="pill warn" style="cursor:pointer" data-act="otab" data-tab="quality">${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''} from past feedback</button>` : ''}</div>
 <div class="otabs" role="tablist">${[['prompt', 'Prompt'], ['thinking', 'Thinking'], ['quality', 'Quality ' + sc.total], ['versions', 'Versions' + (vs.length ? ' ' + vs.length : '')], ['feedback', 'Feedback' + (d.buildId && feedbackOf(d.buildId).length ? ' ' + feedbackOf(d.buildId).length : '')]].map(([k, l]) => `<button class="otab" role="tab" data-act="otab" data-tab="${k}" aria-selected="${S.otab === k}">${esc(l)}</button>`).join('')}</div>
 <div class="panel ${S.otab === 'thinking' ? 'thinking' : ''}" id="panel">${(({ prompt: outPrompt, thinking: outThinking, quality: outQuality, versions: outVersions, feedback: outFeedback })[S.otab] || outPrompt)(r, vs)}</div>`;
+    const ms = $('#mviewScore'); if (ms) ms.textContent = sc.total;
     const t = $('#bTitle'); if (t) t.textContent = d.inputs.title || d.inputs.topic || d.inputs.docname || d.inputs.dataset || d.inputs.piecetype || 'Untitled prompt';
   }
 
@@ -320,7 +324,7 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     if (!vs.length) return `<div class="empty"><p>No versions yet. Press <b>Save version</b> to keep this prompt, its thinking and its inputs in the Library. Each save adds a version; nothing is overwritten.</p><button class="btn primary" data-act="save-version">Save version</button></div>`;
     return `<div class="list" style="border:0;border-radius:0">${vs.map((v, i) => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>v${v.n}${i === 0 ? ' <span class="pill plain">Latest</span>' : ''}</h3>
 <div class="meta"><span>${esc(fmtDate(v.at))}</span><span class="num">Score ${v.score}</span><span class="num">${words(v.prompt).toLocaleString('en-IN')} words</span>${v.device ? `<span>from device ${esc(v.device)}</span>` : ''}</div>${v.note ? `<p class="small">${esc(v.note)}</p>` : ''}</div>
-<div class="row"><button class="btn sm" data-act="v-view" data-id="${v.id}">View</button><button class="btn sm" data-act="v-diff" data-id="${v.id}">Compare with now</button><button class="btn sm" data-act="v-restore" data-id="${v.id}">Load inputs</button><button class="btn sm" data-act="v-copy" data-id="${v.id}">Copy</button></div></div>`).join('')}</div>`;
+<div class="acts"><button class="btn sm" data-act="v-view" data-id="${v.id}">View</button><button class="btn sm" data-act="v-diff" data-id="${v.id}">Compare with now</button><button class="btn sm" data-act="v-restore" data-id="${v.id}">Load inputs</button><button class="btn sm" data-act="v-copy" data-id="${v.id}">Copy</button></div></div>`).join('')}</div>`;
   }
 
   // field memory
@@ -379,7 +383,7 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     if (d.buildId && !isDirty()) { toast('No changes since the last version'); return; }
     const sh = modal(`<h2>Save version</h2><p class="muted">Keeps this prompt, its thinking and every input. Earlier versions stay in history.</p>
 <label class="f"><span class="f-name">What changed? (optional)</span><input id="vNote" placeholder="e.g. added sync rules"></label>
-<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save version</button></div>`);
+<div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save version</button></div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     const go = () => {
       const note = $('#vNote').value.trim(); closeModal();
@@ -436,14 +440,14 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     return `<div class="think-body" style="gap:16px">
 <section class="stack"><h3 style="color:var(--muted)">How did the AI's answer go?</h3>
 <p class="small muted">Paste the answer you got, or just describe the issues. Prompt Builder spots the problem and proposes a lesson: either a step added to future prompts, or a warning shown when you build a similar prompt.</p>
-<div class="row"><label class="f" style="min-width:160px;flex:1"><span class="f-name">For version</span><select id="fbVersion">${vs.map(v => `<option value="${v.id}"${v.id === F.versionId ? ' selected' : ''}>v${v.n} · ${esc(fmtDate(v.at))}</option>`).join('')}</select></label>
-<div class="f" style="flex:2;min-width:240px"><span class="f-name">Result</span><div class="row" role="radiogroup" aria-label="Result">${Object.entries(OUTCOMES).map(([k, [l]]) => `<label class="check"><input type="radio" name="fbOutcome" value="${k}"${F.outcome === k ? ' checked' : ''}> ${l}</label>`).join('')}</div></div></div>
+<div class="form-row"><label class="f" for="fbVersion"><span class="f-name">For version</span><select id="fbVersion">${vs.map(v => `<option value="${v.id}"${v.id === F.versionId ? ' selected' : ''}>v${v.n} · ${esc(fmtDate(v.at))}</option>`).join('')}</select></label>
+<fieldset class="f seg-field"><legend class="f-name">Result</legend><div class="seg" role="radiogroup" aria-label="Result">${Object.entries(OUTCOMES).map(([k, [l]]) => `<label class="seg-opt"><input type="radio" name="fbOutcome" value="${k}"${F.outcome === k ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div></fieldset></div>
 <label class="f" for="fbIssues"><span class="f-name">What went wrong, or issues you faced</span><textarea id="fbIssues" rows="3" placeholder="e.g. It asked me five questions before starting, and two links were broken.">${esc(F.issues)}</textarea></label>
 <label class="f" for="fbResponse"><span class="f-name">The AI's answer (optional)</span><textarea id="fbResponse" rows="5" class="big" style="min-height:120px" placeholder="Paste the response here. It is checked for placeholders, invented links, questions instead of work and similar problems.">${esc(F.response)}</textarea></label>
 <div class="row"><button class="btn primary" data-act="fb-analyse">Find lessons</button>${F.outcome === 'good' && !String(F.issues).trim() ? '<button class="btn" data-act="fb-save">Save feedback</button>' : ''}</div>
 </section>
 ${props ? `<section class="stack"><h3 style="color:var(--muted)">Proposed lessons</h3>${props.length ? props.map((p, i) => lessonCard(p, i)).join('') + `<div class="row"><button class="btn primary" data-act="fb-save">Save feedback and ${props.filter(p => p.keep).length} lesson${props.filter(p => p.keep).length === 1 ? '' : 's'}</button></div>` : '<p>No problem found in what you entered. Describe the issue in a sentence and press Find lessons again, or save the feedback as it is.</p><div class="row"><button class="btn" data-act="fb-save">Save feedback</button></div>'}</section>` : ''}
-${past.length ? `<section class="stack"><h3 style="color:var(--muted)">Earlier feedback on this prompt</h3><div class="list">${past.map(f => { const v = D().versions[f.versionId]; const ls = (f.lessonIds || []).map(id => D().lessons[id]).filter(l => l && !l.d); return `<div class="item"><div class="stack" style="gap:4px;min-width:0"><div class="meta"><span class="pill ${OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][1] : 'plain'}">${esc(OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][0] : f.outcome)}</span><span>${v && !v.d ? 'v' + v.n : 'deleted version'}</span><span>${esc(fmtDate(f.at))}</span></div>${f.issues ? `<p class="small" style="white-space:pre-wrap">${esc(f.issues)}</p>` : ''}${ls.length ? `<p class="small muted">Lessons: ${ls.map(l => esc(l.title)).join('; ')}</p>` : ''}</div><div class="row"><button class="btn sm danger" data-act="fb-del" data-id="${f.id}">Delete</button></div></div>`; }).join('')}</div></section>` : ''}
+${past.length ? `<section class="stack"><h3 style="color:var(--muted)">Earlier feedback on this prompt</h3><div class="list">${past.map(f => { const v = D().versions[f.versionId]; const ls = (f.lessonIds || []).map(id => D().lessons[id]).filter(l => l && !l.d); return `<div class="item"><div class="stack" style="gap:4px;min-width:0"><div class="meta"><span class="pill ${OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][1] : 'plain'}">${esc(OUTCOMES[f.outcome] ? OUTCOMES[f.outcome][0] : f.outcome)}</span><span>${v && !v.d ? 'v' + v.n : 'deleted version'}</span><span>${esc(fmtDate(f.at))}</span></div>${f.issues ? `<p class="small" style="white-space:pre-wrap">${esc(f.issues)}</p>` : ''}${ls.length ? `<p class="small muted">Lessons: ${ls.map(l => esc(l.title)).join('; ')}</p>` : ''}</div><div class="acts"><button class="btn sm danger" data-act="fb-del" data-id="${f.id}">Delete</button></div></div>`; }).join('')}</div></section>` : ''}
 </div>`;
   }
   function lessonCard(p, i) {
@@ -452,9 +456,9 @@ ${past.length ? `<section class="stack"><h3 style="color:var(--muted)">Earlier f
 <label class="check"><input type="checkbox" data-pf="keep"${p.keep ? ' checked' : ''}> <b>${esc(p.title)}</b>${p.existing ? ' <span class="pill plain">Seen before; will be counted again</span>' : ''}</label>
 ${p.evidence ? `<p class="small muted">Found from ${esc(p.evidence)}.</p>` : ''}
 <label class="f"><span class="f-name">Lesson name</span><input data-pf="title" value="${esc(p.title)}"></label>
-<div class="f"><span class="f-name">What should happen next time</span><div class="row"><label class="check"><input type="radio" name="pm${i}" data-pf="mode" value="step"${p.mode === 'step' ? ' checked' : ''}> Add a step to future prompts</label><label class="check"><input type="radio" name="pm${i}" data-pf="mode" value="warn"${p.mode === 'warn' ? ' checked' : ''}> Only warn me</label></div></div>
-<div class="row"><label class="f" style="flex:1;min-width:200px"><span class="f-name">Applies to</span><select data-pf="scope"><option value="type"${p.scope === 'type' ? ' selected' : ''}>${esc(Engine.T[t].name)} prompts</option><option value="all"${p.scope === 'all' ? ' selected' : ''}>Every prompt</option><option value="keywords"${p.scope === 'keywords' ? ' selected' : ''}>Prompts mentioning…</option></select></label>
-${p.scope === 'keywords' ? `<label class="f" style="flex:1;min-width:200px"><span class="f-name">Words (comma separated)</span><input data-pf="keywords" value="${esc((p.keywords || []).join(', '))}" placeholder="ocr, tamil"></label>` : ''}</div>
+<fieldset class="f seg-field"><legend class="f-name">What should happen next time</legend><div class="seg"><label class="seg-opt"><input type="radio" name="pm${i}" data-pf="mode" value="step"${p.mode === 'step' ? ' checked' : ''}><span>Add a step to future prompts</span></label><label class="seg-opt"><input type="radio" name="pm${i}" data-pf="mode" value="warn"${p.mode === 'warn' ? ' checked' : ''}><span>Only warn me</span></label></div></fieldset>
+<div class="form-row"><label class="f"><span class="f-name">Applies to</span><select data-pf="scope"><option value="type"${p.scope === 'type' ? ' selected' : ''}>${esc(Engine.T[t].name)} prompts</option><option value="all"${p.scope === 'all' ? ' selected' : ''}>Every prompt</option><option value="keywords"${p.scope === 'keywords' ? ' selected' : ''}>Prompts mentioning…</option></select></label>
+${p.scope === 'keywords' ? `<label class="f"><span class="f-name">Words (comma separated)</span><input data-pf="keywords" value="${esc((p.keywords || []).join(', '))}" placeholder="ocr, tamil"></label>` : ''}</div>
 <label class="f"><span class="f-name">Step added to prompts</span><textarea data-pf="line" rows="3">${esc(p.line)}</textarea></label>
 <label class="f"><span class="f-name">Warning shown</span><textarea data-pf="warning" rows="2">${esc(p.warning)}</textarea></label>
 </div>`;
@@ -495,11 +499,11 @@ ${p.scope === 'keywords' ? `<label class="f" style="flex:1;min-width:200px"><spa
 <label class="f"><span class="f-name">Lesson name</span><input id="lTitle" value="${esc(l.title)}" placeholder="e.g. Asked questions instead of working"></label>
 <label class="f"><span class="f-name">What should happen</span><select id="lMode"><option value="step"${l.mode === 'step' ? ' selected' : ''}>Add a step to future prompts</option><option value="warn"${l.mode === 'warn' ? ' selected' : ''}>Only warn me</option></select></label>
 <label class="f"><span class="f-name">Applies to</span><select id="lScope"><option value="all"${l.scope === 'all' ? ' selected' : ''}>Every prompt</option><option value="type"${l.scope === 'type' ? ' selected' : ''}>These kinds of prompt</option><option value="keywords"${l.scope === 'keywords' ? ' selected' : ''}>Prompts mentioning these words</option></select></label>
-<div class="f"><span class="f-name">Kinds of prompt (for "These kinds")</span><div class="row">${Engine.TYPE_ORDER.map(t => `<label class="check small"><input type="checkbox" class="lType" value="${t}"${(l.types || []).includes(t) ? ' checked' : ''}> ${esc(Engine.T[t].short)}</label>`).join('')}</div></div>
+<div class="f"><span class="f-name">Kinds of prompt (for "These kinds")</span><div class="check-grid">${Engine.TYPE_ORDER.map(t => `<label class="check small"><input type="checkbox" class="lType" value="${t}"${(l.types || []).includes(t) ? ' checked' : ''}> ${esc(Engine.T[t].short)}</label>`).join('')}</div></div>
 <label class="f"><span class="f-name">Words (for "Prompts mentioning")</span><input id="lKw" value="${esc((l.keywords || []).join(', '))}" placeholder="ocr, tamil"></label>
 <label class="f"><span class="f-name">Step added to prompts</span><textarea id="lLine" rows="3">${esc(l.line)}</textarea></label>
 <label class="f"><span class="f-name">Warning shown</span><textarea id="lWarn" rows="2">${esc(l.warning)}</textarea></label>
-<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save lesson</button></div>`);
+<div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save lesson</button></div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     $('[data-x=yes]', sh).onclick = () => {
       const rec = { ...l, title: $('#lTitle').value.trim() || 'Lesson', mode: $('#lMode').value, scope: $('#lScope').value, types: $$('.lType', sh).filter(x => x.checked).map(x => x.value), keywords: $('#lKw').value.split(',').map(x => x.trim()).filter(Boolean), line: $('#lLine').value.trim(), warning: $('#lWarn').value.trim() };
@@ -533,7 +537,7 @@ ${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div 
     const v = latestVersion(b.id); const n = versionsOf(b.id).length;
     return `<div class="item"><div class="stack" style="gap:6px;min-width:0"><h3 style="overflow-wrap:anywhere">${esc(b.title)}${b.sample ? ' <span class="pill plain">Sample</span>' : ''}${b.imported ? ' <span class="pill plain">Imported</span>' : ''}</h3>
 <div class="meta"><span>${esc(Engine.T[b.type] ? Engine.T[b.type].name : b.type)}</span><span>${n} version${n === 1 ? '' : 's'}</span>${v ? `<span class="num">Score ${v.score}</span><span class="num">${words(v.prompt).toLocaleString('en-IN')} words</span>` : ''}<span>Changed ${esc(fmtDate(b.u))}</span>${(b.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
-<div class="row"><button class="btn sm primary" data-act="open" data-id="${b.id}">Open</button><button class="btn sm" data-act="lib-copy" data-id="${b.id}"${v ? '' : ' disabled'}>Copy prompt</button><button class="btn sm" data-act="dup" data-id="${b.id}">Duplicate</button><button class="btn sm danger" data-act="del" data-id="${b.id}">Delete</button></div></div>`;
+<div class="acts"><button class="btn sm primary" data-act="open" data-id="${b.id}">Open</button><button class="btn sm" data-act="lib-copy" data-id="${b.id}"${v ? '' : ' disabled'}>Copy prompt</button><button class="btn sm" data-act="dup" data-id="${b.id}">Duplicate</button><button class="btn sm danger" data-act="del" data-id="${b.id}">Delete</button></div></div>`;
   }
 
   function openBuild(id) {
@@ -555,16 +559,16 @@ ${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div 
     const shown = mem.filter(x => (!S.mem.field || x.field === S.mem.field) && (!q || x.value.toLowerCase().includes(q)));
     const groups = fields.filter(f => shown.some(x => x.field === f));
     m.innerHTML = `<div class="page narrow">${banners()}
-<div class="stack" style="gap:2px"><span class="eyebrow">Saved inputs</span><h1>Lessons, profiles and previous entries</h1><p class="muted">Everything you type is remembered when you save a version, so next time you pick it instead of typing it. Pin what you use most.</p></div>
+<div class="page-head"><span class="eyebrow">Saved inputs</span><h1>Lessons, profiles and previous entries</h1><p class="muted">Everything you type is remembered when you save a version, so next time you pick it instead of typing it. Pin what you use most.</p></div>
 ${lessonsSection()}
 <section class="card"><div class="row spread"><h2>Profiles</h2><button class="btn primary" data-act="prof-new">Add profile</button></div>
 <p class="small muted">A profile becomes the PROFILE block of Build and Extend prompts. Change the profile to reuse a prompt for someone else.</p>
 ${profiles.length ? `<div class="list">${profiles.map(p => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>${esc(p.label)}${settings().profileId === p.id ? ' <span class="pill plain">Default</span>' : ''}</h3><p class="small muted" style="white-space:pre-wrap">${esc(Engine.profileLines(p).join('\n'))}</p></div>
-<div class="row"><button class="btn sm" data-act="prof-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="prof-default" data-id="${p.id}">Make default</button><button class="btn sm danger" data-act="prof-del" data-id="${p.id}">Delete</button></div></div>`).join('')}</div>` : '<div class="empty"><p>No profile yet.</p></div>'}</section>
+<div class="acts"><button class="btn sm" data-act="prof-edit" data-id="${p.id}">Edit</button><button class="btn sm" data-act="prof-default" data-id="${p.id}">Make default</button><button class="btn sm danger" data-act="prof-del" data-id="${p.id}">Delete</button></div></div>`).join('')}</div>` : '<div class="empty"><p>No profile yet.</p></div>'}</section>
 <section class="card"><h2>Previous entries <span class="muted small num">(${mem.length})</span></h2>
-<div class="filters" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)"><input type="search" id="memQ" placeholder="Search entries" value="${esc(S.mem.q)}" aria-label="Search entries"><select id="memF" aria-label="Field"><option value="">All fields</option>${fields.map(f => `<option value="${f}"${S.mem.field === f ? ' selected' : ''}>${esc(label(f))}</option>`).join('')}</select></div>
-${groups.length ? groups.map(f => `<div class="stack"><h3>${esc(label(f))}</h3><div class="list">${shown.filter(x => x.field === f).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.last - a.last).map(x => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(x.value.length > 600 ? x.value.slice(0, 600) + '…' : x.value)}</p><div class="meta"><span class="num">Used ${x.uses || 1}×</span><span>Last ${esc(fmtDate(x.last))}</span>${x.pinned ? '<span class="pill plain">Pinned</span>' : ''}</div></div>
-<div class="row"><button class="btn sm" data-act="mem-pin" data-id="${x.id}">${x.pinned ? 'Unpin' : 'Pin'}</button><button class="btn sm" data-act="mem-edit" data-id="${x.id}">Edit</button><button class="btn sm danger" data-act="mem-del" data-id="${x.id}">Delete</button></div></div>`).join('')}</div></div>`).join('') : `<div class="empty"><p>${mem.length ? 'No entry matches.' : 'Nothing remembered yet. Save a version on Build and its inputs appear here.'}</p></div>`}
+<div class="filters cols-2"><input type="search" id="memQ" placeholder="Search entries" value="${esc(S.mem.q)}" aria-label="Search entries"><select id="memF" aria-label="Field"><option value="">All fields</option>${fields.map(f => `<option value="${f}"${S.mem.field === f ? ' selected' : ''}>${esc(label(f))}</option>`).join('')}</select></div>
+${groups.length ? groups.map(f => `<details class="group mem-group" data-mem="${esc(f)}"${S.mem.q || S.mem.field || (S.memOpen || {})[f] ? ' open' : ''}><summary><span>${esc(label(f))}</span><span class="count">${shown.filter(x => x.field === f).length}</span></summary><div class="list flush">${shown.filter(x => x.field === f).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.last - a.last).map(x => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(x.value.length > 600 ? x.value.slice(0, 600) + '…' : x.value)}</p><div class="meta"><span class="num">Used ${x.uses || 1}×</span><span>Last ${esc(fmtDate(x.last))}</span>${x.pinned ? '<span class="pill plain">Pinned</span>' : ''}</div></div>
+<div class="acts"><button class="btn sm" data-act="mem-pin" data-id="${x.id}">${x.pinned ? 'Unpin' : 'Pin'}</button><button class="btn sm" data-act="mem-edit" data-id="${x.id}">Edit</button><button class="btn sm danger" data-act="mem-del" data-id="${x.id}">Delete</button></div></div>`).join('')}</div></details>`).join('') : `<div class="empty"><p>${mem.length ? 'No entry matches.' : 'Nothing remembered yet. Save a version on Build and its inputs appear here.'}</p></div>`}
 </section></div>`;
   }
   function lessonsSection() {
@@ -574,7 +578,7 @@ ${groups.length ? groups.map(f => `<div class="stack"><h3>${esc(label(f))}</h3><
 ${ls.length ? `<div class="list">${ls.map(l => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>${esc(l.title)}</h3>
 <div class="meta"><span class="pill ${l.active === false ? 'plain' : l.mode === 'step' ? 'good' : 'warn'}">${l.active === false ? 'Paused' : l.mode === 'step' ? 'Adds a step' : 'Warns'}</span><span>${esc(scopeText(l))}</span><span class="num">Reported ${l.seen || 1}×</span>${l.lastAt ? `<span>Last ${esc(fmtDate(l.lastAt))}</span>` : ''}</div>
 <p class="small" style="white-space:pre-wrap">${esc(l.mode === 'step' ? l.line : (l.warning || l.line))}</p>${(l.sources || []).length ? `<p class="small muted">From: ${esc(Array.from(new Set(l.sources.map(x => x.title).filter(Boolean))).join(', '))}</p>` : ''}</div>
-<div class="row"><button class="btn sm" data-act="lesson-mode" data-id="${l.id}">${l.mode === 'step' ? 'Warn only' : 'Add as step'}</button><button class="btn sm" data-act="lesson-pause" data-id="${l.id}">${l.active === false ? 'Resume' : 'Pause'}</button><button class="btn sm" data-act="lesson-edit" data-id="${l.id}">Edit</button><button class="btn sm danger" data-act="lesson-del" data-id="${l.id}">Delete</button></div></div>`).join('')}</div>` : '<div class="empty"><p>No lessons yet. After you use a prompt, open its Feedback tab on Build and describe how the answer went.</p></div>'}</section>`;
+<div class="acts"><button class="btn sm" data-act="lesson-mode" data-id="${l.id}">${l.mode === 'step' ? 'Warn only' : 'Add as step'}</button><button class="btn sm" data-act="lesson-pause" data-id="${l.id}">${l.active === false ? 'Resume' : 'Pause'}</button><button class="btn sm" data-act="lesson-edit" data-id="${l.id}">Edit</button><button class="btn sm danger" data-act="lesson-del" data-id="${l.id}">Delete</button></div></div>`).join('')}</div>` : '<div class="empty"><p>No lessons yet. After you use a prompt, open its Feedback tab on Build and describe how the answer went.</p></div>'}</section>`;
   }
   const label = f => f === 'tags' ? 'Tags' : (Engine.F[f] ? Engine.F[f].label : f);
 
@@ -583,7 +587,7 @@ ${ls.length ? `<div class="list">${ls.map(l => `<div class="item"><div class="st
     const fld = (k, l, h) => `<label class="f"><span class="f-name">${l}</span>${k === 'extra' ? `<textarea id="p-${k}" rows="3">${esc(p[k] || '')}</textarea>` : `<input id="p-${k}" value="${esc(p[k] || '')}">`}${h ? `<span class="f-hint">${h}</span>` : ''}</label>`;
     const sh = modal(`<h2>${p.label ? 'Edit profile' : 'Add profile'}</h2>
 ${fld('label', 'Profile name', 'For you only, e.g. "Me, personal projects".')}${fld('owner', 'Owner name')}${fld('location', 'City')}${fld('timezone', 'Timezone')}${fld('github', 'GitHub account', 'Used to work out the repository and live address.')}${fld('currency', 'Money format')}${fld('fiscal', 'Financial year')}${fld('weeks', 'Weeks')}${fld('dates', 'Dates and times')}${fld('extra', 'Other profile lines', 'One per line, e.g. "Default accounts: HDFC, UCO Bank, Indian Bank and Cash wallet".')}
-<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save profile</button></div>`);
+<div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save profile</button></div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     $('[data-x=yes]', sh).onclick = () => {
       const rec = { ...p }; ['label', 'owner', 'location', 'timezone', 'github', 'currency', 'fiscal', 'weeks', 'dates', 'extra'].forEach(k => (rec[k] = $('#p-' + k).value.trim()));
@@ -595,36 +599,42 @@ ${fld('label', 'Profile name', 'For you only, e.g. "Me, personal projects".')}${
   }
 
   // ---------------------------------------------------------------- SETUP
+  const n = (k, one, many) => `${k.toLocaleString('en-IN')} ${k === 1 ? one : (many || one + 's')}`;
+  // One settings row: what it is (title + hint) on the left, its control on the right, on one line.
+  const setRow = (title, hint, control, id) => `<div class="set-row"${id ? ` id="${id}"` : ''}><div class="set-text"><span class="set-title">${title}</span>${hint ? `<span class="set-hint">${hint}</span>` : ''}</div><div class="set-ctl">${control}</div></div>`;
   function pSetup(m) {
     const st = settings();
     const profiles = live('profiles');
     const installed = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    const sel = (id, opts, cur) => `<select id="${id}" aria-label="${id}">${opts.map(([k, v]) => `<option value="${esc(k)}"${cur === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
     m.innerHTML = `<div class="page narrow">${banners()}
-<div class="stack" style="gap:2px"><span class="eyebrow">Setup</span><h1>Setup</h1></div>
-<section class="card" id="syncCard"><h2>Sync between devices</h2>
-${Sync.supported ? `<p>Pick a folder inside OneDrive. This device writes one save file per session there (<code>prompt-builder-save-…json.gz</code>), keeps its newest 3, and reads every other device's saves when the page opens or becomes visible again. Each record keeps the newest change, and deletions travel too.</p>
-<p class="small muted">Status: <b>${esc(Sync.label()[0])}</b>${Sync.detail ? ' · ' + esc(Sync.detail) : ''}${Sync.dir ? ` · folder <code>${esc(Sync.dir.name)}</code>` : ''} · this device's id <code>${esc(Sync.device())}</code></p>
-<div class="row"><button class="btn primary" data-act="sync-choose">${Sync.dir ? 'Choose a different folder' : 'Choose sync folder'}</button>${Sync.dir ? '<button class="btn" data-act="sync-retry">Sync now</button><button class="btn" data-act="sync-off">Stop syncing on this device</button>' : ''}</div>`
-  : `<p>This browser cannot open folders (Firefox, Safari and every iPhone browser). Use <b>Download backup</b> here and <b>Restore from backup</b> on the other device; restore merges and never deletes.</p>`}
+<div class="page-head"><h1>Setup</h1><p class="muted">Sync, your data, defaults for new prompts, and this device.</p></div>
+<section class="card settings" id="syncCard"><h2>Sync between devices</h2>
+${Sync.supported ? `<p class="small muted">Pick a folder inside OneDrive. This device writes one save file per session there, keeps its newest 3, and reads the other devices' saves whenever the page opens or comes back into view. Each record keeps its newest change, and deletions travel too.</p>
+${setRow('Sync folder', `Status: <b>${esc(Sync.label()[0])}</b>${Sync.detail ? ' · ' + esc(Sync.detail) : ''}${Sync.dir ? ` · <code>${esc(Sync.dir.name)}</code>` : ''} · device <code>${esc(Sync.device())}</code>`,
+    `<button class="btn primary" data-act="sync-choose">${Sync.dir ? 'Change folder' : 'Choose sync folder'}</button>`)}
+${Sync.dir ? setRow('Sync now', 'Read new saves from the folder and write this device\'s changes.', '<button class="btn" data-act="sync-retry">Sync now</button>') + setRow('Stop syncing on this device', 'Nothing is deleted, here or in the folder.', '<button class="btn" data-act="sync-off">Stop syncing</button>') : ''}`
+  : `<p class="small muted">This browser cannot open folders (Firefox, Safari and every iPhone browser). Use <b>Download backup</b> here and <b>Restore from backup</b> on the other device.</p>`}
 </section>
-<section class="card"><h2>Your data</h2>
-<div class="row"><button class="btn" data-act="backup">Download backup</button><label class="btn" for="restoreFile">Restore from backup</label><input type="file" id="restoreFile" accept=".json,application/json" hidden></div>
-<p class="small muted">Restore shows what a backup will add or update before anything changes, never deletes, and can bring back items you deleted here.</p>
-<div class="row"><button class="btn" data-act="xlsx">Export everything to Excel</button><button class="btn" data-act="csv">Export library to CSV</button></div>
-<div class="row"><button class="btn" data-act="sample-load">Load sample data</button><button class="btn" data-act="sample-remove">Remove sample data</button></div>
-<p class="small muted">Stored on this device in ${Store.mode === 'idb' ? 'browser storage (IndexedDB)' : '<b>memory only</b>; download a backup before closing'}: ${live('builds').length} prompts, ${live('versions').length} versions, ${live('memory').length} saved entries, ${profiles.length} profiles.</p>
+<section class="card settings"><h2>Your data</h2>
+${setRow('Backup', 'Restore shows what a backup will change first, never deletes, and can bring back items you deleted here.',
+    `<button class="btn" data-act="backup">Download backup</button><label class="btn" for="restoreFile" role="button" tabindex="0">Restore from backup</label><input type="file" id="restoreFile" accept=".json,application/json" hidden>`)}
+${setRow('Export', 'Excel has five sheets: library, versions, saved inputs, lessons and feedback. CSV has the library only.',
+    '<button class="btn" data-act="xlsx">Excel</button><button class="btn" data-act="csv">CSV</button>')}
+${setRow('Sample data', 'Two example prompts, clearly marked, removable in one tap.',
+    '<button class="btn" data-act="sample-load">Load</button><button class="btn" data-act="sample-remove">Remove</button>')}
+<p class="small muted set-foot">Stored on this device in ${Store.mode === 'idb' ? 'browser storage' : '<b>memory only</b>; download a backup before closing'}: ${n(live('builds').length, 'prompt')}, ${n(live('versions').length, 'version')}, ${n(live('memory').length, 'saved entry', 'saved entries')}, ${n(live('lessons').length, 'lesson')}, ${n(profiles.length, 'profile')}.</p>
 </section>
-<section class="card"><h2>Defaults for new prompts</h2>
-<div class="filters" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-<label class="f"><span class="f-name">Prompt layout</span><select id="setStyle">${Object.entries(Engine.STYLES).map(([k, v]) => `<option value="${k}"${st.style === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
-<label class="f"><span class="f-name">When something is unclear</span><select id="setUnclear">${Object.entries(Engine.UNCLEAR).map(([k, v]) => `<option value="${k}"${st.unclear === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
-<label class="f"><span class="f-name">Default profile</span><select id="setProfile"><option value="">None</option>${profiles.map(p => `<option value="${p.id}"${st.profileId === p.id ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label></div></section>
-<section class="card"><h2>This device</h2>
-<div class="row"><button class="btn" data-act="install"${S.deferredInstall ? '' : ' disabled'}>${installed ? 'Installed' : 'Install app'}</button>
-<label class="f" style="min-width:200px"><span class="f-name">Appearance</span><select id="setTheme"><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
-${S.deferredInstall || installed ? '' : '<p class="small muted">No install prompt from this browser. In Chrome on Android use the menu, then Add to Home screen; in Edge use Apps, then Install this site as an app.</p>'}
+<section class="card settings"><h2>Defaults for new prompts</h2>
+${setRow('<label for="setStyle">Prompt layout</label>', 'Plain headings match your ledger prompts.', sel('setStyle', Object.entries(Engine.STYLES), st.style))}
+${setRow('<label for="setUnclear">When something is unclear</label>', 'What the AI should do about gaps you leave.', sel('setUnclear', Object.entries(Engine.UNCLEAR), st.unclear))}
+${setRow('<label for="setProfile">Default profile</label>', 'Filled into the PROFILE block of new Build and Extend prompts.', sel('setProfile', [['', 'None']].concat(profiles.map(p => [p.id, p.label])), st.profileId))}
+</section>
+<section class="card settings"><h2>This device</h2>
+${setRow('Install app', installed ? 'Installed: Prompt Builder opens in its own window.' : S.deferredInstall ? 'Opens in its own window and works offline.' : 'This browser gives no install button. In Chrome on Android use the menu, then Add to Home screen; in Edge use Apps, then Install this site as an app.',
+    `<button class="btn" data-act="install"${S.deferredInstall ? '' : ' disabled'}>${installed ? 'Installed' : 'Install'}</button>`)}
+${setRow('<label for="setTheme">Appearance</label>', 'Follow system matches your device\'s light or dark mode.', sel('setTheme', [['system', 'Follow system'], ['light', 'Light'], ['dark', 'Dark']], Prefs.get('theme', 'system')))}
 </section></div>`;
-    $('#setTheme').value = Prefs.get('theme', 'system');
   }
 
   // ---------------------------------------------------------------- data tools
@@ -652,7 +662,7 @@ ${S.deferredInstall || installed ? '' : '<p class="small muted">No install promp
 ${nothing ? '<p>This device already has everything in this backup, at the same or a newer version. Nothing to restore.</p>' : '<p>Restore adds and updates; it never deletes anything here.</p>'}
 <ul class="stack" style="margin:0;padding-left:20px">${rows.join('') || '<li>The backup is empty.</li>'}</ul>
 ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive" checked> Bring back the ${plan.revive.length} item${plan.revive.length === 1 ? '' : 's'} I deleted on this device</label><p class="small muted">They come back on your other synced devices too.</p>` : ''}
-<div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">${nothing ? 'Close' : 'Cancel'}</button>${nothing ? '' : '<button class="btn primary" data-x="yes">Restore</button>'}</div>`);
+<div class="modal-foot"><button class="btn" data-x="no">${nothing ? 'Close' : 'Cancel'}</button>${nothing ? '' : '<button class="btn primary" data-x="yes">Restore</button>'}</div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     const go = $('[data-x=yes]', sh);
     if (go) go.onclick = () => {
@@ -763,13 +773,15 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
       if (isDirty()) confirmBox('Start a new prompt?', 'The current inputs have changes that are not saved as a version. They will be cleared.', 'Start new', go); else go();
     },
     'save-version'() { saveVersion(); },
+    'mview'(b) { S.mview = b.dataset.v; $('.bench').dataset.mview = S.mview; $$('.mview-btn').forEach(x => x.setAttribute('aria-selected', String(x.dataset.v === S.mview))); window.scrollTo({ top: 0 }); },
     'otab'(b) { S.otab = b.dataset.tab; Prefs.set('otab', S.otab); paintOut(); },
     'copy-prompt'() { copy(S.out.prompt, 'Prompt'); },
     'copy-thinking'() { copy(S.out.thinkingText, 'Thinking'); },
     'dl-prompt'() { download(`${Files.safeFolder(S.draft.inputs.title || 'prompt') || 'prompt'}.txt`, S.out.prompt, 'text/plain;charset=utf-8'); },
     'mem'(b) { if (popEl && popEl.dataset.field === b.dataset.field) return closePop(); openPop(b, b.dataset.field); popEl.dataset.field = b.dataset.field; },
     'fix'(b) {
-      const k = b.dataset.field; const det = $('#f-' + k) && $('#f-' + k).closest('details'); if (det) det.open = true;
+      const k = b.dataset.field;
+      if (S.mview === 'output') ACT.mview({ dataset: { v: 'inputs' } }); const det = $('#f-' + k) && $('#f-' + k).closest('details'); if (det) det.open = true;
       const el = $('#f-' + k); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus(); const mb = el.closest('label').querySelector('.mem-btn'); if (mb && !String(S.draft.inputs[k] || '').trim() && (memFor(k).length || (Engine.F[k].sug || []).length)) setTimeout(() => ACT.mem(mb), 350); }
     },
     'append-fix'(b) {
@@ -777,7 +789,7 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
       const add = { task: 'Your task: [state exactly what to produce, in one sentence].', role: 'You are a [specific expert role].', context: 'Context: the goal is [why], so that [what success looks like].', specific: '[Add numbers: counts, sizes, limits, dates.]', examples: 'Example: [input] → [expected result].', structure: 'Deliver the result as [format: sections / a table with columns … / a file].', steps: 'Work step by step: first [ ], then [ ], then [ ].', unsure: 'If you are unsure about something, say you do not know instead of guessing.', verify: 'Before answering, verify your result by [method] and tell me what you could not check.', limits: 'Do not [ ]. Never [ ]. Only [ ].', done: 'Done when: [check] → [what a pass looks like].' }[c.id];
       S.draft.inputs.prompt = String(S.draft.inputs.prompt || '').replace(/\s*$/, '') + '\n\n' + add; $('#f-prompt').value = S.draft.inputs.prompt; saveDraft(); paintOut(); toast('Line added; fill in the brackets');
     },
-    'v-view'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} · ${esc(fmtDate(v.at))}</h2><button class="btn" data-x="no">Close</button></div>${v.note ? `<p>${esc(v.note)}</p>` : ''}<div class="row"><button class="btn sm primary" data-x="cp">Copy prompt</button><button class="btn sm" data-x="ct">Copy thinking</button></div><div class="table-wrap"><pre class="sheet">${esc(v.prompt)}</pre></div><h3>Thinking</h3><div class="table-wrap thinking"><pre class="sheet" style="font-family:var(--f-body)">${esc(v.thinking)}</pre></div>`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; $('[data-x=cp]', sh).onclick = () => copy(v.prompt, 'Prompt'); $('[data-x=ct]', sh).onclick = () => copy(v.thinking, 'Thinking'); },
+    'v-view'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} · ${esc(fmtDate(v.at))}</h2><button class="btn" data-x="no">Close</button></div>${v.note ? `<p>${esc(v.note)}</p>` : ''}<div class="acts"><button class="btn sm primary" data-x="cp">Copy prompt</button><button class="btn sm" data-x="ct">Copy thinking</button></div><div class="table-wrap"><pre class="sheet">${esc(v.prompt)}</pre></div><h3>Thinking</h3><div class="table-wrap thinking"><pre class="sheet" style="font-family:var(--f-body)">${esc(v.thinking)}</pre></div>`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; $('[data-x=cp]', sh).onclick = () => copy(v.prompt, 'Prompt'); $('[data-x=ct]', sh).onclick = () => copy(v.thinking, 'Thinking'); },
     'v-diff'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} compared with now</h2><button class="btn" data-x="no">Close</button></div><p class="small muted">Struck-through red lines were in v${v.n}; green lines are new now.</p><div class="table-wrap"><pre class="diff" style="padding:14px">${lineDiff(v.prompt, S.out.prompt)}</pre></div>`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; },
     'v-restore'(b) { const v = D().versions[b.dataset.id]; const go = () => { S.draft = { ...S.draft, type: v.type, tags: v.tags || [], inputs: { ...v.inputs }, options: { style: 'plain', off: {}, ...(v.options || {}) }, profileId: v.profileId || '' }; saveDraft(); rerender(); toast(`Inputs from v${v.n} loaded. Save a version to keep them as the latest.`); }; if (isDirty()) confirmBox('Load these inputs?', 'Your current unsaved inputs will be replaced. Saved versions are not touched.', 'Load inputs', go); else go(); },
     'v-copy'(b) { copy(D().versions[b.dataset.id].prompt, 'Prompt'); },
@@ -794,7 +806,7 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
     'mem-del'(b) { Store.remove('memory', b.dataset.id); toast('Entry deleted'); rerender(); },
     'mem-edit'(b) {
       const x = D().memory[b.dataset.id];
-      const sh = modal(`<h2>Edit entry</h2><p class="small muted">${esc(label(x.field))}</p><textarea id="memText" rows="8">${esc(x.value)}</textarea><div class="row" style="justify-content:flex-end"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save</button></div>`);
+      const sh = modal(`<h2>Edit entry</h2><p class="small muted">${esc(label(x.field))}</p><textarea id="memText" rows="8">${esc(x.value)}</textarea><div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save</button></div>`);
       $('[data-x=no]', sh).onclick = closeModal;
       $('[data-x=yes]', sh).onclick = () => { const v = $('#memText').value.trim(); closeModal(); if (!v || v === x.value) return; const id = Model.memId(x.field, v); Store.remove('memory', x.id, { batch: true }); const cur = D().memory[id]; Store.put('memory', { id, field: x.field, value: v, uses: (x.uses || 1) + (cur && !cur.d ? cur.uses || 0 : 0), last: x.last, pinned: x.pinned, first: x.first }, { batch: true }); Store.commit(); rerender(); };
     },
@@ -839,8 +851,12 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
     document.addEventListener('input', onInput);
     document.addEventListener('change', onChange);
     document.addEventListener('click', onClick);
-    document.addEventListener('toggle', e => { const g = e.target; if (g.matches && g.matches('details[data-group]')) { S.openGroups = S.openGroups || {}; S.openGroups[S.draft.type + ':' + g.dataset.group] = g.open; } }, true);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePop(); closeModal(); } });
+    document.addEventListener('toggle', e => { const g = e.target; if (g.matches && g.matches('details[data-mem]')) { S.memOpen = S.memOpen || {}; S.memOpen[g.dataset.mem] = g.open; }
+      if (g.matches && g.matches('details[data-group]')) { S.openGroups = S.openGroups || {}; S.openGroups[S.draft.type + ':' + g.dataset.group] = g.open; } }, true);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { closePop(); closeModal(); }
+      const t = e.target; if ((e.key === 'Enter' || e.key === ' ') && t.matches && t.matches('label[role=button][for]')) { e.preventDefault(); const i = document.getElementById(t.htmlFor); if (i) i.click(); }
+    });
     window.addEventListener('hashchange', route);
     Store.on((kind, info) => {
       if (kind === 'change' && !(info && info.fromSync)) Sync.schedule();
