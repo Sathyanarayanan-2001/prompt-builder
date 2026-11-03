@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tests/output/
+# personal data must never be committed
+prompt-builder-save-*
+Prompt_Builder_Backup*
+Prompt_Builder_Starter*
+Prompt_Builder_All_*
+Prompt_Builder_Library_*
+*_PromptManager.zip
+Prompt_Manager_repository_*
+prompt_repository/
+Prompting.zip
+.DS_Store
