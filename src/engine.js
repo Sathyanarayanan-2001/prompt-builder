@@ -613,7 +613,7 @@ const Engine = (() => {
     const th = thinkingFor(ctx);
     const missingRequired = T[ctx.type].required.filter(k => !has(ctx.inp[k])).map(k => F[k].label);
     if (missingRequired.length) { sc.total = Math.min(sc.total, 30); sc.grade = 'Incomplete'; sc.capped = true; }
-    return { type: ctx.type, prompt: ctx.prompt, score: sc, thinking: th, thinkingText: thinkingText(th, ctx.title, ctx.type === 'review' ? ctx.inp.thinking : ''), missingRequired, packs: ctx.packs, warnings: ctx.warnings || [] };
+    return { type: ctx.type, prompt: ctx.prompt, score: sc, thinking: th, thinkingText: thinkingText(th, ctx.title, ctx.type === 'review' ? ctx.inp.thinking : ''), missingRequired, packs: ctx.packs, warnings: ctx.warnings || [], sections: ctx.sections || [], now: ctx.now };
   }
 
   // ---------------------------------------------------------------- lessons from feedback

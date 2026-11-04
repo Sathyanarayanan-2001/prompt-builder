@@ -6,6 +6,7 @@ One static page, no framework, no libraries at run time. `scripts/build.mjs` inl
 | --- | --- |
 | `src/engine.js` | Templates (fields per request type), smart rule packs, prompt assembly in three layouts, quality scoring, the thinking explanation. Pure functions. |
 | `src/reviewers.js` | The reviewer panel: 201 experts with background, skills, trigger words and checks; panel picking; the panel review prompt. Pure data and functions. |
+| `src/importer.js` | Maps a real-AI panel answer back onto fields: the JSON fields block first, else a section-by-section line diff against the current prompt; tool-added lines stay out of fields. |
 | `src/model.js` | Data shape, canonical JSON, the merge rule, sanitising, backup format. Pure functions. |
 | `src/files.js` | Hand-written zip writer, xlsx writer, CSV and gzip. |
 | `src/store.js` | IndexedDB storage with a memory fallback, preferences in localStorage (`prompt-builder.` prefix), and folder sync. |

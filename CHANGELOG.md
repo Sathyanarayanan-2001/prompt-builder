@@ -2,6 +2,17 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] - 2026-11-04
+
+### Added
+- Paste panel answer: paste Claude's reply to the panel review prompt and its improvements are mapped back onto your fields. The panel prompt now asks Claude to return every field in a JSON block; without one, each section of the improved prompt is compared line by line with the current prompt.
+- A preview shows each field now and after the panel; untick what you do not want, then apply. Changed fields are marked "Changed by panel" until you save.
+- Lines the tool adds itself never land in your fields; if the panel removed one, that addition is switched off and its other kept lines become yours.
+- The panel's answer is stored with the next version ("Panel reviewed"); unmatched text can be stored as a Review prompt.
+
+### Fixed
+- Section headings with a lowercase note, such as "RULES (exact)", are coloured as headings in the prompt view.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added

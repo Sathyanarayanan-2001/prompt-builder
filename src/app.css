@@ -342,3 +342,9 @@ details.group[open] > summary > span:first-child::before { transform: rotate(45d
   .dir-item { grid-template-columns: auto minmax(0, 1fr); }
   .dir-item .acts { grid-column: 1 / -1; }
 }
+
+/* panel answer import */
+.pa-val { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; max-width: 34ch; }
+.pa-new { background: var(--added); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+label.f-changed > textarea, label.f-changed > input, label.f-changed > select { border-color: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
