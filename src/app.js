@@ -203,7 +203,7 @@
 <li><h3>See how an AI will think it through</h3><p>The amber <b>Thinking</b> tab walks through the AI's reasoning step by step: the real need, what you decided, what was defaulted, what is still open, how it will verify, and what it cannot prove.</p></li>
 <li><h3>Close the gaps the score shows</h3><p><b>Quality</b> scores the prompt out of 100 against the prompting guide. Each missing item has a <b>Fix</b> button that takes you to the right field.</p></li>
 <li><h3>Copy, save, reuse</h3><p>Press <b>Copy prompt</b> and paste it into Claude. Press <b>Save version</b> to keep it in the Library with its thinking; every save is a new version, so nothing is overwritten. Every value you typed is remembered for next time.</p></li>
-<li><h3>Let the reviewer panel check it</h3><p>The <b>Reviewers</b> tab shows notes from 5 to 8 experts picked from ${Reviewers.LIST.length} (engineers, algorithmic thinkers, AI and automation specialists, accountants, grid code, power quality and energy-transition specialists, quality managers, trainers, designers, lawyers and more). Press <b>Add to prompt</b> on any note you agree with. <b>Copy panel review prompt</b> asks Claude to run the same panel with real AI.</p></li>
+<li><h3>Let the reviewer panel check it</h3><p>The <b>Reviewers</b> tab shows notes from 5 to 8 experts picked from ${Reviewers.LIST.length} (engineers, algorithmic thinkers, AI and automation specialists, accountants, grid code, power quality and energy-transition specialists, quality managers, trainers, designers, lawyers and more). Press <b>Add to prompt</b> on any note you agree with. For a real-AI review, press <b>1. Copy panel review prompt</b>, paste it into Claude, then press <b>2. Paste panel answer</b> and paste Claude's reply: the improvements are mapped back onto your fields, shown for you to check, and saved with the next version.</p></li>
 <li><h3>Tell it how the answer went</h3><p>After you use the prompt, open the <b>Feedback</b> tab, paste the AI's answer or describe the issues, and press <b>Find lessons</b>. Each lesson either adds a step to future prompts or warns you when you build a similar one. Manage them under Lessons learned in <b>Saved inputs</b>.</p></li>
 </ol></section>
 
@@ -243,7 +243,7 @@ ${T.profile ? `<div class="card" style="gap:10px"><div class="row spread"><h3>Pr
 <div class="form-row form-row-check"><select id="f-profile" data-opt="profileId" aria-label="Profile"><option value="">No profile</option>${profiles.map(p => `<option value="${esc(p.id)}"${p.id === d.profileId ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
 <label class="check"><input type="checkbox" id="f-useProfile" data-opt="useProfile"${d.options.useProfile !== false ? ' checked' : ''}> Include in prompt</label></div>
 ${profiles.length ? '' : '<p class="small muted">No profile yet. Add one in Saved inputs so your name, currency and financial year go in automatically.</p>'}</div>` : ''}
-${T.groups.map(([g, keys], gi) => `<details class="group" data-group="${esc(g)}" ${isOpen(g, gi === 0 || keys.some(k => String(d.inputs[k] || '').trim() && k !== 'unclear')) ? 'open' : ''}><summary><span>${esc(g)}</span><span class="count">${keys.filter(k => String(d.inputs[k] || '').trim() && k !== 'unclear').length} of ${keys.length} filled</span></summary><div class="group-body">${keys.map(k => fieldHTML(k, T)).join('')}</div></details>`).join('')}
+${T.groups.map(([g, keys], gi) => `<details class="group" data-group="${esc(g)}" ${(S.reviewChanged && keys.some(k => S.reviewChanged.has(k))) || isOpen(g, gi === 0 || keys.some(k => String(d.inputs[k] || '').trim() && k !== 'unclear')) ? 'open' : ''}><summary><span>${esc(g)}</span><span class="count">${keys.filter(k => String(d.inputs[k] || '').trim() && k !== 'unclear').length} of ${keys.length} filled</span></summary><div class="group-body">${keys.map(k => fieldHTML(k, T)).join('')}</div></details>`).join('')}
 <details class="group" data-group="Prompt options" ${isOpen('Prompt options', (d.tags || []).length > 0) ? 'open' : ''}><summary><span>Prompt options</span><span class="count">${esc(Engine.STYLES[d.options.style] || 'Plain headings')}</span></summary><div class="group-body">
 <label class="f"><span class="f-head"><span class="f-name">Prompt layout</span></span><select id="f-style" data-opt="style">${Object.entries(Engine.STYLES).map(([k, v]) => `<option value="${k}"${d.options.style === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select><span class="f-hint">Plain headings match your ledger prompts; XML tags suit long prompts with several parts.</span></label>
 ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="checkbox" id="f-chatOnly" data-opt="chatOnly"${d.options.chatOnly ? ' checked' : ''}> Add the chat-only fallback (send files one at a time and wait for "continue")</label>` : ''}
@@ -265,7 +265,8 @@ ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="c
     if (f.kind === 'select') ctl = `<select id="f-${k}" data-field="${k}">${Object.entries(f.options).map(([o, l]) => `<option value="${o}"${(v || settings().unclear) === o ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     else if (f.kind === 'line') ctl = `<input id="f-${k}" data-field="${k}" value="${esc(v)}" placeholder="${esc(f.ph || '')}">`;
     else ctl = `<textarea id="f-${k}" data-field="${k}" rows="${f.big ? 12 : f.kind === 'list' ? 4 : 3}" class="${f.big ? 'big' : ''}" placeholder="${esc(f.ph || '')}">${esc(v)}</textarea>`;
-    return `<label class="f" for="f-${k}"><span class="f-head"><span class="f-name">${esc(f.label)}${req}</span>${memBtn}</span>${ctl}<span class="f-hint">${esc(f.hint || '')}</span></label>`;
+    const chg = S.reviewChanged && S.reviewChanged.has(k) ? ' <span class="pill good" title="Updated from the panel review">Changed by panel</span>' : '';
+    return `<label class="f${chg ? ' f-changed' : ''}" for="f-${k}"><span class="f-head"><span class="f-name">${esc(f.label)}${req}${chg}</span>${memBtn}</span>${ctl}<span class="f-hint">${esc(f.hint || '')}</span></label>`;
   }
 
   function paintOut() {
@@ -289,7 +290,7 @@ ${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequir
     const added = r.added;
     const html = r.prompt ? r.prompt.split('\n').map(l => {
       const bare = l.replace(/^\s*(?:- |\d+\. |Test: )/, '').replace(/^Test: /, '');
-      if (/^(#{1,3} |<\/?[a-z_]+>$|[0-9]+\. [A-Z][A-Z0-9 ,&()'-]+$|[A-Z][A-Z ,&-]{3,}( \(.*\))?$)/.test(l)) return `<span class="h">${esc(l)}</span>`;
+      if (/^(#{1,3} |<\/?[a-z_]+>$|[0-9]+\. [A-Z][A-Z0-9 ,&'-]+( \([^)]*\))?$|[A-Z][A-Z ,&-]{3,}( \(.*\))?$)/.test(l)) return `<span class="h">${esc(l)}</span>`;
       if (added.has(bare)) return `<span class="add" title="Added by Prompt Builder">${esc(l)}</span>`;
       return esc(l) + '\n';
     }).join('') : '<span class="muted">Start typing on the left. The prompt forms here.</span>';
@@ -330,7 +331,7 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
   function outVersions(r, vs) {
     if (!vs.length) return `<div class="empty"><p>No versions yet. Press <b>Save version</b> to keep this prompt, its thinking and its inputs in the Library. Each save adds a version; nothing is overwritten.</p><button class="btn primary" data-act="save-version">Save version</button></div>`;
     return `<div class="list" style="border:0;border-radius:0">${vs.map((v, i) => `<div class="item"><div class="stack" style="gap:4px;min-width:0"><h3>v${v.n}${i === 0 ? ' <span class="pill plain">Latest</span>' : ''}</h3>
-<div class="meta"><span>${esc(fmtDate(v.at))}</span><span class="num">Score ${v.score}</span><span class="num">${words(v.prompt).toLocaleString('en-IN')} words</span>${v.device ? `<span>from device ${esc(v.device)}</span>` : ''}</div>${v.note ? `<p class="small">${esc(v.note)}</p>` : ''}</div>
+<div class="meta"><span>${esc(fmtDate(v.at))}</span><span class="num">Score ${v.score}</span><span class="num">${words(v.prompt).toLocaleString('en-IN')} words</span>${v.device ? `<span>from device ${esc(v.device)}</span>` : ''}${v.panelReview ? '<span class="pill good">Panel reviewed</span>' : ''}</div>${v.note ? `<p class="small">${esc(v.note)}</p>` : ''}</div>
 <div class="acts"><button class="btn sm" data-act="v-view" data-id="${v.id}">View</button><button class="btn sm" data-act="v-diff" data-id="${v.id}">Compare with now</button><button class="btn sm" data-act="v-restore" data-id="${v.id}">Load inputs</button><button class="btn sm" data-act="v-copy" data-id="${v.id}">Copy</button></div></div>`).join('')}</div>`;
   }
 
@@ -389,7 +390,7 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     if (r.missingRequired.length) { toast('Fill ' + r.missingRequired.join(', ') + ' first'); const k = T.required.find(k => !String(d.inputs[k] || '').trim()); const el = $('#f-' + k); if (el) el.focus(); return; }
     if (d.buildId && !isDirty()) { toast('No changes since the last version'); return; }
     const sh = modal(`<h2>Save version</h2><p class="muted">Keeps this prompt, its thinking and every input. Earlier versions stay in history.</p>
-<label class="f"><span class="f-name">What changed? (optional)</span><input id="vNote" placeholder="e.g. added sync rules"></label>
+<label class="f"><span class="f-name">What changed? (optional)</span><input id="vNote" placeholder="e.g. added sync rules" value="${d.pendingReview ? 'After real-AI panel review' : ''}"></label>${d.pendingReview ? '<p class="small muted">The panel\'s answer is stored with this version.</p>' : ''}
 <div class="modal-foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Save version</button></div>`);
     $('[data-x=no]', sh).onclick = closeModal;
     const go = () => {
@@ -403,7 +404,8 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
       if (b && b.sample) buildRec.sample = 1;
       Store.put('builds', buildRec, { batch: true });
       const prof = profileOf(d.profileId);
-      Store.put('versions', { id: Model.rid('v_'), buildId: buildRec.id, n, at: now, note, type: d.type, tags: d.tags || [], prompt: r.prompt, thinking: r.thinkingText, score: r.score.total, inputs: clean(d.inputs), options: d.options, profileId: d.profileId || '', profile: prof ? { ...prof } : null, device: Sync.device(), sample: buildRec.sample || undefined }, { batch: true });
+      Store.put('versions', { id: Model.rid('v_'), buildId: buildRec.id, n, at: now, note, type: d.type, tags: d.tags || [], prompt: r.prompt, thinking: r.thinkingText, score: r.score.total, inputs: clean(d.inputs), options: d.options, profileId: d.profileId || '', profile: prof ? { ...prof } : null, device: Sync.device(), sample: buildRec.sample || undefined, panelReview: d.pendingReview || undefined }, { batch: true });
+      delete d.pendingReview; S.reviewChanged = null;
       for (const [k, v] of Object.entries(clean(d.inputs))) if (k !== 'unclear' && k !== 'prompt' && k !== 'thinking') remember(k, v, true);
       if ((d.tags || []).length) remember('tags', d.tags.join(', '), true);
       Store.commit();
@@ -447,9 +449,9 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     const quiet = r.notes.filter(o => !o.f.some(f => !f.dismissed));
     const dismissed = r.notes.reduce((n, o) => n + o.f.filter(f => f.dismissed).length, 0);
     const lbl = k => k === 'prompt' ? 'the prompt' : (Engine.F[k] ? Engine.F[k].label : k);
-    return `<div class="toolbar"><button class="btn primary" data-act="rv-copy">Copy panel review prompt</button><button class="btn" data-act="rv-panel">Change panel</button></div>
+    return `<div class="toolbar"><button class="btn primary" data-act="rv-copy">1. Copy panel review prompt</button><button class="btn primary" data-act="rv-paste">2. Paste panel answer</button><button class="btn" data-act="rv-panel">Change panel</button></div>
 <div class="panel-head"><div class="avatars">${r.panel.map(x => `<span class="who" title="${esc(x.name + ', ' + x.role)}">${avatar(x)}</span>`).join('')}</div>
-<p class="small muted">${r.panel.length} reviewers picked for this prompt from ${Reviewers.LIST.length}, by its words and kind. Each checks the prompt from their own field. <b>Copy panel review prompt</b> asks Claude to run the same panel with real AI.</p></div>
+<p class="small muted">${r.panel.length} reviewers picked for this prompt from ${Reviewers.LIST.length}, by its words and kind. Each checks the prompt from their own field. For a real-AI review: <b>copy the panel review prompt</b> into Claude, then <b>paste Claude's answer</b> back here; it maps the improvements onto your fields for you to check.</p></div>
 ${withNotes.length ? withNotes.map(({ x, f }) => `<section class="rv-card">
 <div class="rv-head">${avatar(x, true)}<div class="stack" style="gap:2px;min-width:0"><b>${esc(x.name)} · ${esc(x.role)}</b><span class="small muted">${esc(x.background)}</span></div></div>
 <ul class="rv-notes">${f.filter(n => !n.dismissed || S.showDismissed).map(n => `<li class="${n.dismissed ? 'is-dismissed' : ''}"><b>${esc(n.problem)}</b>
@@ -488,6 +490,66 @@ ${dismissed ? `<p class="rv-quiet"><button class="btn ghost sm" data-act="rv-sho
     el.innerHTML = list.length ? list.map(({ x, rel }) => { const on = inPanel.has(x.id), isFav = fav.includes(x.id), ok = Reviewers.eligible(x, S.draft.type);
       return `<div class="dir-item${on ? ' on' : ''}">${avatar(x, true)}<div class="stack" style="gap:2px;min-width:0"><b>${esc(x.name)} · ${esc(x.role)}</b><span class="small muted">${esc(Reviewers.DOMAINS[x.domain])}${on ? ' · in this panel' : rel >= 1 ? ' · relevant here' : ok ? '' : ' · not for this kind of prompt'}</span><span class="small">${esc(x.skills.join(' · '))}</span></div>
 <div class="acts"><button class="btn sm${isFav ? ' primary' : ''}" data-act="rv-fav" data-id="${x.id}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★ Favourite' : '☆ Favourite'}</button><button class="btn sm" data-act="rv-toggle" data-id="${x.id}"${ok ? '' : ' disabled'}>${on ? 'Remove' : 'Add'}</button></div></div>`; }).join('') : '<div class="empty"><p>No reviewer matches.</p></div>';
+  }
+
+  // ---------------------------------------------------------------- PASTE A REAL-AI PANEL ANSWER
+  function pasteDialog() {
+    const sh = modal(`<div class="row spread"><h2>Paste the panel's answer</h2><button class="btn" data-x="no">Cancel</button></div>
+<p class="small muted">Paste Claude's whole answer to the panel review prompt (or any improved version of this prompt). Its fields block is used when present; otherwise each section is matched to your fields. Nothing changes until you press Apply.</p>
+<label class="f" for="paIn"><span class="f-name">Claude's answer</span><textarea id="paIn" class="big" rows="10" placeholder="Paste here"></textarea></label>
+<div id="paOut"></div>
+<div class="modal-foot"><button class="btn" data-x="no2">Cancel</button><button class="btn primary" id="paRead">Read answer</button></div>`, { wide: true });
+    const close = () => closeModal();
+    $('[data-x=no]', sh).onclick = close; $('[data-x=no2]', sh).onclick = close;
+    $('#paRead').onclick = () => readPasted($('#paIn').value);
+  }
+  function readPasted(text) {
+    if (!String(text).trim()) { toast('Paste the answer first'); return; }
+    const d = S.draft;
+    const res = Importer.importText(text, { type: d.type, inputs: d.inputs, options: { ...d.options, defaultUnclear: settings().unclear }, profile: profileOf(d.profileId), lessons: live('lessons') });
+    S.paste = { text, res };
+    const out = $('#paOut'); const foot = $('.modal-foot');
+    const lab = k => (Engine.F[k] ? Engine.F[k].label : k);
+    const cut = v => { v = String(v || ''); return v.length > 400 ? v.slice(0, 400) + '…' : v; };
+    const src = { json: 'Read the fields block in the answer.', sections: 'Matched the improved prompt\'s sections to your fields.', review: 'The pasted prompt will replace the prompt text.', none: '' }[res.source];
+    if (res.source === 'none') {
+      out.innerHTML = `<div class="banner warn"><span><b>No fields could be matched.</b> This text does not follow this kind of prompt. You can store it as a separate Review prompt, so it is saved and scored.</span></div>`;
+      foot.innerHTML = `<button class="btn" data-x="back">Back</button><button class="btn primary" id="paReview">Store as a Review prompt</button>`;
+      $('#paReview').onclick = () => storeAsReview(text); $('[data-x=back]').onclick = () => readPasted('');
+      return;
+    }
+    const rows = res.changed.map(k => `<tr><td><input type="checkbox" class="paPick" value="${esc(k)}" checked aria-label="Apply ${esc(lab(k))}"></td><td><b>${esc(lab(k))}</b></td><td class="pa-val">${esc(cut(d.inputs[k])) || '<span class="muted">(empty)</span>'}</td><td class="pa-val pa-new">${esc(cut(res.inputs[k])) || '<span class="muted">(cleared)</span>'}</td></tr>`).join('');
+    out.innerHTML = `<p class="small"><b>${esc(src)}</b> ${res.changed.length ? `${res.changed.length} field${res.changed.length === 1 ? '' : 's'} would change.` : 'No field changes.'}</p>
+${rows ? `<div class="table-wrap"><table><thead><tr><th><span class="sr">Apply</span></th><th>Field</th><th>Now</th><th>After the panel</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+${res.notes.length ? `<ul class="small muted" style="margin:8px 0 0;padding-left:20px">${res.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}`;
+    const n = res.changed.length + (res.off.length ? 1 : 0) + (res.options.chatOnly !== undefined ? 1 : 0);
+    foot.innerHTML = `<button class="btn" data-x="back">Back</button><button class="btn primary" id="paApply"${n ? '' : ' disabled'}>Apply to fields</button>`;
+    $('[data-x=back]').onclick = () => { closeModal(); pasteDialog(); $('#paIn').value = text; };
+    $('#paApply').onclick = applyPasted;
+  }
+  function applyPasted() {
+    const { text, res } = S.paste; const d = S.draft;
+    const picked = $$('.paPick').filter(x => x.checked).map(x => x.value);
+    for (const k of picked) d.inputs[k] = res.inputs[k];
+    d.options.off = { ...(d.options.off || {}), ...(res.options.off || {}) };
+    if (res.options.chatOnly !== undefined) d.options.chatOnly = res.options.chatOnly;
+    d.pendingReview = String(text).slice(0, 60000);
+    S.reviewChanged = new Set(picked);
+    saveDraft(); closeModal();
+    if (S.mview === 'output') { S.mview = 'inputs'; }
+    S.otab = 'prompt'; Prefs.set('otab', 'prompt');
+    rerender();
+    toast(`${picked.length} field${picked.length === 1 ? '' : 's'} updated. Check them, then Save version.`);
+  }
+  function storeAsReview(text) {
+    const body = (String(text).match(/```(?:[a-z]*)\n([\s\S]*?)```/) || [])[1] || String(text);
+    const title = ((S.draft.inputs.title || S.draft.inputs.topic || 'Prompt') + ' (panel review)').trim();
+    const now = Date.now(); const inputs = { title, prompt: body.trim(), thinking: '' };
+    const r = Engine.build({ type: 'review', inputs, options: {} });
+    const id = Model.rid('b_');
+    Store.put('builds', { id, title, type: 'review', tags: S.draft.tags || [], inputs, options: { style: 'plain', off: {} }, profileId: '', created: now, latest: { n: 1, score: r.score.total, words: r.score.words, at: now } }, { batch: true });
+    Store.put('versions', { id: Model.rid('v_'), buildId: id, n: 1, at: now, note: 'Stored from a real-AI panel review', type: 'review', tags: S.draft.tags || [], prompt: r.prompt, thinking: r.thinkingText, score: r.score.total, inputs, options: { style: 'plain', off: {} }, profileId: '', device: Sync.device(), panelReview: String(text).slice(0, 60000) }, { batch: true });
+    Store.commit(); closeModal(); toast('Stored as a Review prompt in the Library'); location.hash = '#library';
   }
 
   // ---------------------------------------------------------------- FEEDBACK AND LESSONS
@@ -612,6 +674,7 @@ ${list.length ? `<div class="list">${list.map(libItem).join('')}</div>` : `<div 
       S.draft = { buildId: b.id, type: b.type, tags: b.tags || [], inputs: { ...b.inputs }, options: { style: 'plain', useProfile: true, chatOnly: false, off: {}, ...(b.options || {}) }, profileId: b.profileId || '' };
       saveDraft(); location.hash = '#build'; if (S.route === 'build') renderPage();
     };
+    S.reviewChanged = null;
     if (isDirty() && S.draft.buildId !== id) confirmBox('Leave unsaved changes?', 'The prompt on Build has changes that are not saved as a version. Open this one anyway? Your unsaved inputs will be replaced.', 'Open anyway', go);
     else go();
   }
@@ -860,7 +923,7 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
       const add = { task: 'Your task: [state exactly what to produce, in one sentence].', role: 'You are a [specific expert role].', context: 'Context: the goal is [why], so that [what success looks like].', specific: '[Add numbers: counts, sizes, limits, dates.]', examples: 'Example: [input] → [expected result].', structure: 'Deliver the result as [format: sections / a table with columns … / a file].', steps: 'Work step by step: first [ ], then [ ], then [ ].', unsure: 'If you are unsure about something, say you do not know instead of guessing.', verify: 'Before answering, verify your result by [method] and tell me what you could not check.', limits: 'Do not [ ]. Never [ ]. Only [ ].', done: 'Done when: [check] → [what a pass looks like].' }[c.id];
       S.draft.inputs.prompt = String(S.draft.inputs.prompt || '').replace(/\s*$/, '') + '\n\n' + add; $('#f-prompt').value = S.draft.inputs.prompt; saveDraft(); paintOut(); toast('Line added; fill in the brackets');
     },
-    'v-view'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} · ${esc(fmtDate(v.at))}</h2><button class="btn" data-x="no">Close</button></div>${v.note ? `<p>${esc(v.note)}</p>` : ''}<div class="acts"><button class="btn sm primary" data-x="cp">Copy prompt</button><button class="btn sm" data-x="ct">Copy thinking</button></div><div class="table-wrap"><pre class="sheet">${esc(v.prompt)}</pre></div><h3>Thinking</h3><div class="table-wrap thinking"><pre class="sheet" style="font-family:var(--f-body)">${esc(v.thinking)}</pre></div>`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; $('[data-x=cp]', sh).onclick = () => copy(v.prompt, 'Prompt'); $('[data-x=ct]', sh).onclick = () => copy(v.thinking, 'Thinking'); },
+    'v-view'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} · ${esc(fmtDate(v.at))}</h2><button class="btn" data-x="no">Close</button></div>${v.note ? `<p>${esc(v.note)}</p>` : ''}<div class="acts"><button class="btn sm primary" data-x="cp">Copy prompt</button><button class="btn sm" data-x="ct">Copy thinking</button></div><div class="table-wrap"><pre class="sheet">${esc(v.prompt)}</pre></div><h3>Thinking</h3><div class="table-wrap thinking"><pre class="sheet" style="font-family:var(--f-body)">${esc(v.thinking)}</pre></div>${v.panelReview ? `<details class="group"><summary><span>Real-AI panel review answer</span></summary><div class="table-wrap"><pre class="sheet">${esc(v.panelReview)}</pre></div></details>` : ''}`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; $('[data-x=cp]', sh).onclick = () => copy(v.prompt, 'Prompt'); $('[data-x=ct]', sh).onclick = () => copy(v.thinking, 'Thinking'); },
     'v-diff'(b) { const v = D().versions[b.dataset.id]; const sh = modal(`<div class="row spread"><h2>v${v.n} compared with now</h2><button class="btn" data-x="no">Close</button></div><p class="small muted">Struck-through red lines were in v${v.n}; green lines are new now.</p><div class="table-wrap"><pre class="diff" style="padding:14px">${lineDiff(v.prompt, S.out.prompt)}</pre></div>`, { wide: true }); $('[data-x=no]', sh).onclick = closeModal; },
     'v-restore'(b) { const v = D().versions[b.dataset.id]; const go = () => { S.draft = { ...S.draft, type: v.type, tags: v.tags || [], inputs: { ...v.inputs }, options: { style: 'plain', off: {}, ...(v.options || {}) }, profileId: v.profileId || '' }; saveDraft(); rerender(); toast(`Inputs from v${v.n} loaded. Save a version to keep them as the latest.`); }; if (isDirty()) confirmBox('Load these inputs?', 'Your current unsaved inputs will be replaced. Saved versions are not touched.', 'Load inputs', go); else go(); },
     'v-copy'(b) { copy(D().versions[b.dataset.id].prompt, 'Prompt'); },
@@ -885,7 +948,8 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
     'rv-dismiss'(b) { panelOpts().dismissed[b.dataset.key] = true; saveDraft(); paintOut(); },
     'rv-undismiss'(b) { delete panelOpts().dismissed[b.dataset.key]; saveDraft(); paintOut(); },
     'rv-showdis'() { S.showDismissed = !S.showDismissed; paintOut(); },
-    'rv-copy'() { const r = S.out; copy(Reviewers.panelPrompt(r.panel, r.prompt, Engine.T[S.draft.type].name), 'Panel review prompt'); },
+    'rv-copy'() { const r = S.out; copy(Reviewers.panelPrompt(r.panel, r.prompt, Engine.T[S.draft.type].name, S.draft.type === 'review' ? null : Importer.fieldSpec(S.draft.type, S.draft.inputs)), 'Panel review prompt'); },
+    'rv-paste'() { pasteDialog(); },
     'rv-panel'() { dirOpen(); },
     'rv-toggle'(b) {
       const id = b.dataset.id, pn = panelOpts(), on = S.out.panel.some(x => x.id === id);

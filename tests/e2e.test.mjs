@@ -503,6 +503,52 @@ test('reviewer panel: notes, add to prompt, dismiss, change panel, favourites, p
   await ctx.close();
 });
 
+test('real-AI panel answer: paste, preview, apply to fields, save, reopen with matching fields', async () => {
+  const { ctx, p } = await page({ permissions: ['clipboard-read', 'clipboard-write'] });
+  await p.goto(URL0 + '#build');
+  await p.fill('#f-title', 'Expense ledger'); await p.fill('#f-goal', 'A daily expense tracker for my bank accounts, offline on my phone.'); await p.fill('#f-rules', 'Savings = income - expense');
+  await p.locator('[data-act=save-version]').first().click(); await p.click('[data-x=yes]'); await p.waitForTimeout(150);
+  await p.click('[data-tab=reviewers]'); await p.click('[data-act=rv-copy]');
+  const pp = await p.evaluate(() => navigator.clipboard.readText());
+  assert.match(pp, /FINALLY, RETURN THE FIELDS/); assert.match(pp, /- rules \| Exact rules and formulas \| list \| "Savings = income - expense"/);
+  // 1. an answer with a fields block
+  const answer = 'Panel notes.\n```json\n' + JSON.stringify({ fields: { goal: 'A daily expense and budget tracker for my HDFC and UCO accounts, offline on my Android phone.', rules: 'Savings = income - expense\nReconcile each account against the bank balance at every month end.', need: 'A missed day must show as a gap, never as zero.' } }) + '\n```';
+  await p.click('[data-act=rv-paste]'); await p.fill('#paIn', answer); await p.click('#paRead');
+  assert.match(await p.locator('#paOut').textContent(), /Read the fields block in the answer\. 3 fields would change\./);
+  await p.locator('.paPick[value=need]').uncheck(); // the user can leave a change out
+  await p.click('#paApply'); await p.waitForTimeout(150);
+  assert.equal(await p.inputValue('#f-goal'), 'A daily expense and budget tracker for my HDFC and UCO accounts, offline on my Android phone.');
+  assert.equal(await p.inputValue('#f-need'), '');
+  assert.equal(await p.locator('.f-changed').count(), 2);
+  assert.equal(await p.locator('.status-line .pill', { hasText: 'Unsaved changes' }).count(), 1);
+  // the user edits a field before saving; the final prompt carries both
+  await p.fill('#f-goal', (await p.inputValue('#f-goal')) + ' It works on two laptops too.'); await p.waitForTimeout(200);
+  assert.match(await p.locator('#promptText').textContent(), /Reconcile each account[\s\S]*/);
+  await p.locator('[data-act=save-version]').first().click();
+  assert.equal(await p.inputValue('#vNote'), 'After real-AI panel review'); await p.click('[data-x=yes]'); await p.waitForTimeout(150);
+  const v = await p.evaluate(() => Object.values(PB.Store.data.versions).sort((a, b) => b.at - a.at)[0]);
+  assert.match(v.panelReview, /Panel notes/); assert.match(v.prompt, /two laptops too/); assert.match(v.prompt, /Reconcile each account/);
+  // reopen: the fields match what was saved
+  await p.click('[data-act=new]'); if (await p.locator('.modal').count()) await p.click('[data-x=yes]');
+  await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); await p.waitForTimeout(150);
+  assert.match(await p.inputValue('#f-goal'), /HDFC and UCO accounts, offline on my Android phone\. It works on two laptops too\.$/);
+  assert.equal(await p.inputValue('#f-rules'), 'Savings = income - expense\nReconcile each account against the bank balance at every month end.');
+  assert.equal(await p.locator('.status-line .pill', { hasText: 'Unsaved changes' }).count(), 0);
+  await p.click('[data-tab=versions]'); assert.equal(await p.locator('#panel .pill', { hasText: 'Panel reviewed' }).count(), 1);
+  // 2. an answer with only the improved prompt: sections are matched
+  const cur = await p.evaluate(() => PB.S.out.prompt);
+  const improved = cur.replace(/(\n\d+\. KNOWN PITFALLS \(avoid them\)\n)/, '$1- Never store card PINs.\n');
+  await p.click('[data-tab=reviewers]'); await p.click('[data-act=rv-paste]'); await p.fill('#paIn', 'Improved prompt:\n```\n' + improved + '\n```'); await p.click('#paRead');
+  assert.match(await p.locator('#paOut').textContent(), /Matched the improved prompt's sections/);
+  await p.click('#paApply'); await p.waitForTimeout(150);
+  assert.match(await p.inputValue('#f-pitfalls'), /Never store card PINs\./);
+  // 3. unrelated text can be stored as a Review prompt
+  await p.click('[data-tab=reviewers]'); await p.click('[data-act=rv-paste]'); await p.fill('#paIn', 'Some unrelated notes about lunch.'); await p.click('#paRead');
+  await p.click('#paReview'); await p.waitForTimeout(200);
+  assert.ok(await p.evaluate(() => Object.values(PB.Store.data.builds).some(b => !b.d && b.type === 'review' && /panel review/.test(b.title))));
+  await ctx.close();
+});
+
 test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch targets', async () => {
   const audit = async p => p.evaluate(() => {
     const out = { misaligned: [], unlabelled: [], lowContrast: [] };
@@ -556,6 +602,7 @@ test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch 
           if (tab === 'feedback') { await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); if (await p.locator('.mview').isVisible()) await p.click('[data-act=mview][data-v=output]'); }
           await p.click(`[data-tab=${tab}]`); await p.waitForTimeout(80);
         }
+        if (tab === 'reviewers') { await p.click('[data-act=rv-paste]'); await p.fill('#paIn', '```json\n{"fields": {"extra": "One more line"}}\n```'); await p.click('#paRead'); await p.waitForTimeout(80); const pa = await audit(p); assert.deepEqual([pa.misaligned, pa.unlabelled, pa.lowContrast], [[], [], []], 'paste dialog at ' + vp.width + ' ' + theme); await p.click('.modal [data-x=back]'); await p.click('.modal [data-x=no]'); }
         if (tab === 'reviewers') { await p.click('[data-act=rv-panel]'); await p.waitForTimeout(80); const d = await audit(p); assert.deepEqual([d.misaligned, d.unlabelled], [[], []], 'reviewer directory at ' + vp.width); await p.click('.modal [data-x=no]'); }
         const a = await audit(p);
         const where = `${r}${tab ? '/' + tab : ''} at ${vp.width}px ${theme}`;

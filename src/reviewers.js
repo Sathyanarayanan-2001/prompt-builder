@@ -880,7 +880,7 @@ const Reviewers = (() => {
     });
     return out;
   }
-  function panelPrompt(panel, promptText, kindName) {
+  function panelPrompt(panel, promptText, kindName, fields) {
     const who = panel.map((x, i) => `${i + 1}. ${x.name}, ${x.role.toLowerCase()}. ${x.background} Skills: ${x.skills.join(', ')}.`).join('\n');
     return `You are a review panel of ${panel.length} experts. Review the prompt between the markers before it is sent to an AI${kindName ? ' (kind: ' + kindName.toLowerCase() + ')' : ''}. Do not carry out the prompt itself.
 
@@ -900,7 +900,16 @@ THEN, AS A PANEL
 
 <<<PROMPT
 ${promptText}
-PROMPT>>>`;
+PROMPT>>>${fields && fields.length ? `
+
+FINALLY, RETURN THE FIELDS
+The prompt above is generated from the fields below. After the improved prompt, give one \`\`\`json block with the final value of every field, exactly in this shape: {"fields": {"key": "value"}}.
+- Use the keys exactly as listed. For list fields, put one item per line (separated by \\n).
+- Keep a field's current value when nothing changes; use "" to clear it.
+- Put each improvement in the field it belongs to. Do not copy lines that appear in the prompt but not in any field: the tool adds those itself.
+${fields.some(f => f.options) ? '- For "unclear", use one of: ' + fields.find(f => f.options).options.join(', ') + '.\n' : ''}
+FIELDS (key | name | kind | current value)
+${fields.map(f => `- ${f.key} | ${f.label} | ${f.kind} | ${JSON.stringify(f.value)}`).join('\n')}` : ''}`;
   }
 
   return { DOMAINS, LIST, byId, initials, eligible, relevance, ranked, pick, findings, panelPrompt, checkKey };

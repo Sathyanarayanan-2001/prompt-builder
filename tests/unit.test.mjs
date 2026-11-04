@@ -295,3 +295,68 @@ test('panel review prompt lists the experts and wraps the prompt', () => {
   assert.match(t, /<<<PROMPT\nBuild X\.\nPROMPT>>>$/);
   assert.match(t, /\[ASSUMED\]/);
 });
+
+// ---------- real-AI panel answer back into fields
+const Importer = require('../src/importer.js');
+const FULL = {
+  app: { title: 'Expense ledger', role: 'senior engineer', goal: 'A daily expense tracker as an offline web app on my phone.', need: 'Missed days must show.', users: 'One user.', stack: 'Plain HTML.', features: 'Add page\nDashboard', data: 'Entry: date, amount', rules: 'Savings = income - expense', examples: '120+80 saves as 200', storage: 'IndexedDB.', sync: 'OneDrive folder.', offline: 'Service worker.', design: 'Calm.', repo: 'MIT licence.', privacy: 'No analytics.', unclear: 'decide', verify: 'Round 1 by hand', tests: 'Totals match', pitfalls: 'Keep refs as text', acceptance: 'Offline | Airplane mode | Opens', buildorder: 'Core\nPages', delivery: 'Final answer: summary.', extra: 'Use Tamil labels' },
+  extend: { title: 'Prompt Manager', role: 'principal engineer', existing: 'Tkinter app.', change: 'Add a button.', preserve: 'Search\nTags', stack: 'Python.', constraints: 'No new dependencies', unclear: 'irreversible', verify: 'py_compile', tests: 'Round trip text', pitfalls: 'Keep image refs', delivery: 'Link files.', extra: 'Be brief' },
+  research: { topic: 'grid code testing', role: 'research assistant', purpose: 'Training list.', scope: 'Since 2020.', sources: 'CEA site.', output: 'A table.', columns: 'Title\nLink', count: '10', unclear: 'decide', verify: 'Open links', extra: 'No filler' },
+  document: { docname: 'CEA.pdf', role: 'grid engineer', focus: 'FRT limits', audience: 'Trainees', length: 'Two paragraphs', questions: 'What is LVRT?\nWhat is HVRT?', citations: 'Cite clauses', extra: 'Plain words' },
+  analysis: { dataset: 'ledger.xlsx', role: 'analyst', context: 'Budget review', metrics: 'Total spend\nTop category', structure: 'Summary\nTrends', visuals: 'Two charts', unclear: 'decide', extra: 'Use rupees' },
+  brainstorm: { topic: 'training games', context: 'Wind techs', constraints: 'Under 30 minutes', count: '12', categories: 'Icebreakers\nRecap', output: 'A table.', extra: 'Indian context' },
+  content: { piecetype: 'a handout', topic: 'harmonics', audience: 'Technicians', tone: 'Plain', structure: 'Intro\nSteps', length: '1 page', example: 'Like this one.', cta: 'Ask questions.', extra: 'Use SI units' },
+};
+test('round trip: every kind and layout reads its own prompt back with no changes', () => {
+  for (const [type, inputs] of Object.entries(FULL)) for (const style of ['plain', 'markdown', 'xml']) {
+    const ctx = { type, inputs, options: { style } };
+    const out = Importer.importText(Engine.build(ctx).prompt, ctx);
+    assert.equal(out.source, 'sections', `${type}/${style}`);
+    assert.deepEqual([out.changed, out.off], [[], []], `${type}/${style}: ${out.notes.join(' | ')}`);
+  }
+});
+test('panel edits land in the right fields (hand-worked expectations)', () => {
+  const inputs = { title: 'Expense ledger', role: 'senior engineer', goal: 'A daily expense tracker for my bank accounts as an offline web app on my phone.', rules: 'Savings = income - expense\nOld rule to drop', acceptance: 'Offline | Airplane mode | Opens', unclear: 'decide' };
+  const ctx = { type: 'app', inputs, options: { style: 'plain' } };
+  let p = Engine.build(ctx).prompt;
+  p = p.replace('You are a senior engineer.', 'You are a senior full-stack engineer who thinks like an accountant.')
+    .replace(/- Do not ask me questions\.[^\n]*\n/, '- Before you start, ask me up to five focused questions about anything that would change the result, each with your recommended answer. After my reply, work without further questions.\n- Keep every file under 400 lines.\n')
+    .replace('for my bank accounts as', 'for my HDFC and UCO accounts, as')
+    .replace('- Old rule to drop\n', '- Reconcile each account against the bank balance at every month end.\n')
+    .replace('- Hold money as whole paise (integers). Never add floating-point rupees; every total is exact.\n', '')
+    .replace('Offline → Airplane mode → Opens', 'Offline → Reload in airplane mode → Opens with all entries')
+    .replace(/(\n\d+\. KNOWN PITFALLS \(avoid them\)\n)/, '\n9. GLOSSARY\n- CW: ISO calendar week\n$1- Never store PINs.\n');
+  const out = Importer.importText('Notes first.\n```\n' + p + '\n```', ctx);
+  assert.equal(out.source, 'sections');
+  assert.equal(out.inputs.role, 'senior full-stack engineer who thinks like an accountant');
+  assert.equal(out.inputs.unclear, 'ask');
+  assert.equal(out.inputs.goal, 'A daily expense tracker for my HDFC and UCO accounts, as an offline web app on my phone.');
+  assert.equal(out.inputs.rules, 'Savings = income - expense\nReconcile each account against the bank balance at every month end.\nShow rupees with lakh grouping (1,23,456.78).');
+  assert.equal(out.inputs.acceptance, 'Offline | Reload in airplane mode | Opens with all entries');
+  assert.equal(out.inputs.pitfalls, 'Never store PINs.\nKeep bank reference numbers as text everywhere; Excel turns long numbers into 6.27E+11 and the digits cannot be recovered.');
+  assert.equal(out.inputs.extra, 'Keep every file under 400 lines.\nGLOSSARY: CW: ISO calendar week');
+  assert.deepEqual(out.off, ['money'], 'the removed paise line switches its addition off; its other line is kept as yours');
+  const after = Engine.build({ type: 'app', inputs: out.inputs, options: { style: 'plain', off: out.options.off } }).prompt;
+  assert.doesNotMatch(after, /whole paise/); assert.match(after, /lakh grouping/); assert.match(after, /ask me up to five/);
+});
+test('fields block: used first, tolerant of smart quotes and trailing commas, tool lines left out', () => {
+  const ctx = { type: 'app', inputs: { title: 'T', goal: 'An expense tracker', rules: 'R1' }, options: {} };
+  const ans = 'Here.\n```json\n{ “fields”: { “goal”: “New goal”, "rules": ["R1", "Hold money as whole paise (integers). Never add floating-point rupees; every total is exact.", "R2"], "bogus": "x", "unclear": "ask", } }\n```';
+  const out = Importer.importText(ans, ctx);
+  assert.equal(out.source, 'json');
+  assert.deepEqual([out.inputs.goal, out.inputs.rules, out.inputs.unclear], ['New goal', 'R1\nR2', 'ask']);
+  assert.deepEqual(out.changed.sort(), ['goal', 'rules', 'unclear']);
+  assert.ok(out.notes.some(n => /bogus/.test(n)));
+});
+test('unrelated text matches nothing; a review prompt takes the text as-is', () => {
+  assert.equal(Importer.importText('Just some thoughts about lunch.', { type: 'app', inputs: { title: 'T', goal: 'G' }, options: {} }).source, 'none');
+  const r = Importer.importText('Act as a tester.', { type: 'review', inputs: { title: 'R', prompt: 'old' }, options: {} });
+  assert.deepEqual([r.source, r.inputs.prompt], ['review', 'Act as a tester.']);
+});
+test('panel prompt asks for every field back with its current value', () => {
+  const t = Reviewers.panelPrompt([Reviewers.byId.ca], 'P', 'Build a tool or app', Importer.fieldSpec('app', { title: 'X', goal: 'a\nb' }));
+  assert.match(t, /FINALLY, RETURN THE FIELDS/);
+  assert.match(t, /- goal \| What to build \| text \| "a\\nb"/);
+  assert.match(t, /For "unclear", use one of: decide, ask, irreversible/);
+  assert.equal((t.match(/^- [a-z]+ \| /gm) || []).length, Engine.T.app.groups.flatMap(g => g[1]).length);
+});
