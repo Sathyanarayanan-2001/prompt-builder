@@ -12,7 +12,7 @@ Prompt Builder is a static web app. You describe what you need field by field; i
 
 - **Eight templates:** build a tool or app, extend or fix a tool, research, document summary and Q&A, data analysis, brainstorming, content creation, and review an existing prompt.
 - **Built-in intelligence, offline:** eighteen smart rule packs fire on words you use (money, dates and weeks, sync, offline, phone, Excel, charts, GitHub, personal data, Python desktop, network, time tracking, databases, OCR, research links, verification, build order, handover). Each addition is highlighted in the prompt and can be switched off.
-- **Reviewer panel:** 102 built-in experts (engineers, accountants, grid code and power quality specialists, trainers, designers, lawyers and more). The best 5 to 8 check each prompt; every note comes with a line you add in one click. **Copy panel review prompt** runs the same panel in Claude with real AI.
+- **Reviewer panel:** 201 built-in experts (engineers, accountants, grid code and power quality specialists, trainers, designers, lawyers and more). The best 5 to 8 check each prompt; every note comes with a line you add in one click. **Copy panel review prompt** runs the same panel in Claude with real AI.
 - **Thinking tab:** an eight-step walkthrough of how the AI will read the request, the three piles (decided, defaulted, open), eight questions the AI asks itself, and why each section exists.
 - **Quality score:** eleven weighted checks from the prompting guide, a vague-word penalty, and a Fix button that takes you to the right field.
 - **Every entry remembered:** each field has a Previous button with your earlier entries (pin the best ones) and suggestions. Profiles fill the PROFILE block.

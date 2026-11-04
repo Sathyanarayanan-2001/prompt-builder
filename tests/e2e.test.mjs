@@ -469,15 +469,16 @@ test('reviewer panel: notes, add to prompt, dismiss, change panel, favourites, p
   const before = await p.evaluate(() => PB.S.out.openNotes);
   await li.locator('[data-act=rv-add]').click(); await p.waitForTimeout(150);
   assert.match(await p.inputValue('#f-rules'), new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 1);
+  const afterAdd = await p.evaluate(() => PB.S.out.openNotes);
+  assert.ok(afterAdd <= before - 1, 'one line can satisfy several reviewers');
   assert.match(await p.locator('#toast').textContent(), /Added to Exact rules/);
   // dismiss and restore
   await p.click('[data-tab=reviewers]');
   const firstKey = await p.locator('[data-act=rv-dismiss]').first().getAttribute('data-key');
   await p.locator('[data-act=rv-dismiss]').first().click();
-  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 2);
+  assert.equal(await p.evaluate(() => PB.S.out.openNotes), afterAdd - 1);
   await p.click('[data-act=rv-showdis]'); await p.click(`[data-act=rv-undismiss][data-key="${firstKey}"]`);
-  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 1);
+  assert.equal(await p.evaluate(() => PB.S.out.openNotes), afterAdd);
   // panel prompt copies the panel and the prompt
   await p.click('[data-act=rv-copy]');
   const clip = await p.evaluate(() => navigator.clipboard.readText());
