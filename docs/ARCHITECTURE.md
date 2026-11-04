@@ -5,6 +5,7 @@ One static page, no framework, no libraries at run time. `scripts/build.mjs` inl
 | File | Job |
 | --- | --- |
 | `src/engine.js` | Templates (fields per request type), smart rule packs, prompt assembly in three layouts, quality scoring, the thinking explanation. Pure functions. |
+| `src/reviewers.js` | The reviewer panel: 102 experts with background, skills, trigger words and checks; panel picking; the panel review prompt. Pure data and functions. |
 | `src/model.js` | Data shape, canonical JSON, the merge rule, sanitising, backup format. Pure functions. |
 | `src/files.js` | Hand-written zip writer, xlsx writer, CSV and gzip. |
 | `src/store.js` | IndexedDB storage with a memory fallback, preferences in localStorage (`prompt-builder.` prefix), and folder sync. |
@@ -24,6 +25,10 @@ All data is one object of collections: `builds`, `versions`, `memory`, `profiles
 ## Sync
 
 Each device session writes `prompt-builder-save-<UTC yyyymmddhhmmss>-<device>.json.gz` to the chosen folder 3 seconds after a change and when the page is hidden, keeps its newest 3, and on open and on return reads every other save it has not read (tracked by name, modified time and size). A file that cannot be read yet is skipped and retried. A pull waits for a running write.
+
+## Reviewer panel
+
+Each reviewer has trigger words, the kinds of prompt they apply to, and checks written as `[need, problem, fix line, field]`. A reviewer is relevant when their trigger words appear in your inputs; the panel is your added reviewers and eligible favourites, then the most relevant (up to 8), filled to at least 5 with broad reviewers. A check raises a note when the generated prompt does not match `need`; its fix line always satisfies `need` (a unit test enforces this), so adding it clears the note. Panel changes and dismissed notes are stored with the draft and saved with each version, but do not count as prompt changes.
 
 ## Feedback and lessons
 
