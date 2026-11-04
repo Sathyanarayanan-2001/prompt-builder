@@ -2,6 +2,12 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.0] - 2026-11-04
+
+### Added
+- 99 more reviewers (201 in all, 19 fields, 370 checks). New fields: algorithms and problem solving (algorithmic thinker, complexity, data structures, graphs, dynamic programming, operations research, numerical methods, concurrency, distributed systems, invariants, date/time and units correctness), AI agents and automation (LLM apps, agent design, retrieval, evaluations, red-teaming and prompt injection, automation, prompt chains, token cost, human in the loop), energy transition (solar, battery storage, hybrids, hydrogen, EV charging, energy audit, transmission, power system studies, forecasting and scheduling, carbon), quality and operations (ISO 9001, Six Sigma, root cause, reliability, maintenance, lean, supply chain, inventory, calibration, document control), mathematics and modelling, infrastructure and IT, people and communication.
+- More reviewers in software, finance (GST invoicing, payroll, cash flow, costing), legal (consumer protection, Electricity Act, accessibility), training, research and critical thinking (pre-mortem, inversion, second-order and Socratic thinking).
+
 ## [1.3.0] - 2026-11-04
 
 ### Added

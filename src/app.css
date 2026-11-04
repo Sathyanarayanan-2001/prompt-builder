@@ -318,7 +318,9 @@ details.group[open] > summary > span:first-child::before { transform: rotate(45d
 .avatar.big { width: 36px; height: 36px; font-size: .8rem; border: 0; }
 .avatar[data-dom="finance"], .avatar[data-dom="legal"] { background: var(--warn-soft); color: var(--warn); }
 .avatar[data-dom="wind"], .avatar[data-dom="research"] { background: var(--good-soft); color: var(--good); }
-.avatar[data-dom="general"], .avatar[data-dom="health"] { background: var(--raise); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.avatar[data-dom="quality"], .avatar[data-dom="people"] { background: var(--warn-soft); color: var(--warn); }
+.avatar[data-dom="energy"], .avatar[data-dom="ai"] { background: var(--good-soft); color: var(--good); }
+.avatar[data-dom="general"], .avatar[data-dom="health"], .avatar[data-dom="infra"] { background: var(--raise); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .panel-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
 .avatars { display: flex; flex-wrap: wrap; }
 .avatars .who + .who { margin-left: -6px; }

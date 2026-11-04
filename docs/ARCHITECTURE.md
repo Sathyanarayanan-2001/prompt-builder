@@ -5,7 +5,7 @@ One static page, no framework, no libraries at run time. `scripts/build.mjs` inl
 | File | Job |
 | --- | --- |
 | `src/engine.js` | Templates (fields per request type), smart rule packs, prompt assembly in three layouts, quality scoring, the thinking explanation. Pure functions. |
-| `src/reviewers.js` | The reviewer panel: 102 experts with background, skills, trigger words and checks; panel picking; the panel review prompt. Pure data and functions. |
+| `src/reviewers.js` | The reviewer panel: 201 experts with background, skills, trigger words and checks; panel picking; the panel review prompt. Pure data and functions. |
 | `src/model.js` | Data shape, canonical JSON, the merge rule, sanitising, backup format. Pure functions. |
 | `src/files.js` | Hand-written zip writer, xlsx writer, CSV and gzip. |
 | `src/store.js` | IndexedDB storage with a memory fallback, preferences in localStorage (`prompt-builder.` prefix), and folder sync. |

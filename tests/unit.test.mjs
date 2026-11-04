@@ -234,10 +234,11 @@ test('restore plan: adds, updates, keeps newer local, ignores backup deletions, 
 
 // ---------- reviewer panel
 const Reviewers = require('../src/reviewers.js');
-test('about 100 reviewers in 12 fields, unique ids, each with background, skills and checks', () => {
-  assert.ok(Reviewers.LIST.length >= 100 && Reviewers.LIST.length <= 110, String(Reviewers.LIST.length));
+test('about 200 reviewers in 19 fields, unique ids, each with background, skills and checks', () => {
+  assert.ok(Reviewers.LIST.length >= 195 && Reviewers.LIST.length <= 210, String(Reviewers.LIST.length));
   assert.equal(new Set(Reviewers.LIST.map(x => x.id)).size, Reviewers.LIST.length);
-  assert.equal(Object.keys(Reviewers.DOMAINS).length, 12);
+  assert.equal(Object.keys(Reviewers.DOMAINS).length, 19);
+  for (const d of Object.keys(Reviewers.DOMAINS)) assert.ok(Reviewers.LIST.filter(x => x.domain === d).length >= 6, 'field ' + d);
   for (const x of Reviewers.LIST) {
     assert.ok(Reviewers.DOMAINS[x.domain], x.id);
     assert.ok(x.background.length > 10 && x.skills.length >= 2 && x.checks.length >= 1, x.id);
@@ -260,6 +261,17 @@ test('panel picks the right experts for the words used (hand-picked expectations
   const pq = ids('training handout on power quality harmonics for wind turbine technicians', 'content');
   assert.ok(pq.includes('pq') && pq.includes('ct'), pq.join());
   for (const t of ['ideas for a team outing', 'x', exp.join(' ')]) { const n = ids(t, 'brainstorm').length; assert.ok(n >= 5 && n <= 8, `${t}: ${n}`); }
+});
+test('the second hundred: algorithms, AI, energy, quality and modelling reviewers join the right panels', () => {
+  const ids = (t, type) => Reviewers.pick(t, type).map(x => x.id);
+  assert.ok(ids('Shortest path routing between sites, avoiding circular dependencies', 'app').includes('graph'));
+  const ag = ids('An AI agent that reads my emails with tools and drafts replies', 'app');
+  assert.ok(ag.includes('agent') && ag.includes('redteam'), ag.join());
+  const en = ids('Battery storage and solar PV hybrid with wind: curtailment at the connection', 'research');
+  assert.ok(en.includes('bess') && en.includes('pv') && en.includes('hyb'), en.join());
+  assert.ok(ids('Monthly generation forecast with seasonality and Monte Carlo scenarios', 'analysis').includes('ts'));
+  assert.ok(ids('Root cause analysis report for a turbine gearbox failure with FMEA', 'content').includes('rca'));
+  assert.ok(ids('x', 'brainstorm').includes('algo'), 'the algorithmic thinker fills small panels');
 });
 test('panel honours added, removed and favourite reviewers', () => {
   const t = 'A daily expense tracker for my bank accounts';
