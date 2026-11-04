@@ -35,7 +35,7 @@
     deferredInstall: null,
   };
 
-  function settings() { return Object.assign({ style: 'plain', unclear: 'decide', profileId: '' }, (D().cfg.settings && !D().cfg.settings.d) ? D().cfg.settings : {}); }
+  function settings() { return Object.assign({ style: 'plain', unclear: 'decide', profileId: '', favReviewers: [] }, (D().cfg.settings && !D().cfg.settings.d) ? D().cfg.settings : {}); }
   function saveSettings(patch) { const cur = settings(); const next = { ...cur, ...patch, id: 'settings' }; if (Model.canon({ ...cur, u: 0 }) === Model.canon({ ...next, u: 0 })) return; Store.put('cfg', next); }
 
   function newDraft(type) {
@@ -55,9 +55,15 @@
     const d = S.draft;
     S.out = Engine.build({ type: d.type, inputs: d.inputs, options: { ...d.options, defaultUnclear: settings().unclear }, profile: profileOf(d.profileId), lessons: live('lessons') });
     S.out.added = Engine.addedLines(S.out.packs);
+    const pn = panelOpts();
+    S.out.panel = Reviewers.pick(draftText(d), d.type, { add: pn.add, remove: pn.remove, favourites: settings().favReviewers });
+    S.out.notes = S.out.panel.map(x => ({ x, f: Reviewers.findings(x, S.out.prompt, pn.dismissed) }));
+    S.out.openNotes = S.out.notes.reduce((n, o) => n + o.f.filter(f => !f.dismissed).length, 0);
     return S.out;
   }
   function normOpts(o) { o = o || {}; const off = {}; Object.keys(o.off || {}).filter(k => o.off[k]).sort().forEach(k => (off[k] = true)); return { style: o.style || 'plain', useProfile: o.useProfile !== false, chatOnly: !!o.chatOnly, off }; }
+  function panelOpts() { const o = S.draft.options; o.panel = o.panel || {}; o.panel.add = o.panel.add || []; o.panel.remove = o.panel.remove || []; o.panel.dismissed = o.panel.dismissed || {}; return o.panel; }
+  function draftText(d) { const p = profileOf(d.profileId); return Object.entries(d.inputs || {}).filter(([k]) => k !== 'unclear').map(([, v]) => String(v || '')).join('\n') + (p ? '\n' + Engine.profileLines(p).join('\n') : ''); }
   function snapshotOf(d) { return Model.canon({ type: d.type, tags: d.tags || [], inputs: clean(d.inputs), options: normOpts(d.options), profileId: d.profileId || '' }); }
   function clean(inp) { const o = {}; for (const [k, v] of Object.entries(inp || {})) if (String(v == null ? '' : v).trim()) o[k] = v; return o; }
   function latestVersion(buildId) { return live('versions').filter(v => v.buildId === buildId).sort((a, b) => b.at - a.at || b.n - a.n)[0] || null; }
@@ -189,7 +195,7 @@
 <div class="stack"><h3>Bringing prompts in</h3><p>In Setup, press <b>Restore from backup</b> and pick a Prompt Builder backup file, such as your starter or enhanced-prompts backup. Restore merges and never deletes.</p></div>
 </details>
 
-<section class="card"><h2>How it works, in eight steps</h2><ol class="steps-start">
+<section class="card"><h2>How it works, in nine steps</h2><ol class="steps-start">
 <li><h3>Set your profile once</h3><p>In <b>Saved inputs</b>, add a profile: your name, city, timezone, money format, financial year and GitHub account. It becomes the PROFILE block, the one part you change to reuse a prompt for someone else.</p></li>
 <li><h3>Pick the kind of request</h3><p>On <b>Build</b>, choose Build a tool, Extend or fix a tool, Research, Document, Data analysis, Brainstorming, Content, or Review an existing prompt. Each has its own template.</p></li>
 <li><h3>Fill only what you know</h3><p>Type into the fields, or press <b>Previous</b> beside a field to pick something you entered before (or a suggestion). Empty fields are fine; the tool fills sensible defaults and tells you which.</p></li>
@@ -197,6 +203,7 @@
 <li><h3>See how an AI will think it through</h3><p>The amber <b>Thinking</b> tab walks through the AI's reasoning step by step: the real need, what you decided, what was defaulted, what is still open, how it will verify, and what it cannot prove.</p></li>
 <li><h3>Close the gaps the score shows</h3><p><b>Quality</b> scores the prompt out of 100 against the prompting guide. Each missing item has a <b>Fix</b> button that takes you to the right field.</p></li>
 <li><h3>Copy, save, reuse</h3><p>Press <b>Copy prompt</b> and paste it into Claude. Press <b>Save version</b> to keep it in the Library with its thinking; every save is a new version, so nothing is overwritten. Every value you typed is remembered for next time.</p></li>
+<li><h3>Let the reviewer panel check it</h3><p>The <b>Reviewers</b> tab shows notes from 5 to 8 experts picked from ${Reviewers.LIST.length} (engineers, accountants, grid code and power quality specialists, trainers, designers, lawyers and more). Press <b>Add to prompt</b> on any note you agree with. <b>Copy panel review prompt</b> asks Claude to run the same panel with real AI.</p></li>
 <li><h3>Tell it how the answer went</h3><p>After you use the prompt, open the <b>Feedback</b> tab, paste the AI's answer or describe the issues, and press <b>Find lessons</b>. Each lesson either adds a step to future prompts or warns you when you build a similar one. Manage them under Lessons learned in <b>Saved inputs</b>.</p></li>
 </ol></section>
 
@@ -271,9 +278,9 @@ ${d.type === 'app' || d.type === 'extend' ? `<label class="check"><input type="c
     const cls = sc.capped ? 'bad' : sc.total >= 85 ? 'good' : sc.total >= 65 ? 'warn' : 'bad';
     o.innerHTML = `<div class="status-line"><span class="pill ${cls}">${sc.total} · ${esc(sc.grade)}</span><span class="num">${sc.words.toLocaleString('en-IN')} words</span>
 ${vs.length ? `<span>v${vs[0].n} saved ${esc(fmtDate(vs[0].at))}</span>` : '<span>Not saved yet</span>'}${dirty && vs.length ? '<span class="pill warn">Unsaved changes</span>' : ''}
-${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequired.join(', '))}</span>` : ''}${r.warnings.length ? `<button class="pill warn" style="cursor:pointer" data-act="otab" data-tab="quality">${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''} from past feedback</button>` : ''}</div>
-<div class="otabs" role="tablist">${[['prompt', 'Prompt'], ['thinking', 'Thinking'], ['quality', 'Quality ' + sc.total], ['versions', 'Versions' + (vs.length ? ' ' + vs.length : '')], ['feedback', 'Feedback' + (d.buildId && feedbackOf(d.buildId).length ? ' ' + feedbackOf(d.buildId).length : '')]].map(([k, l]) => `<button class="otab" role="tab" data-act="otab" data-tab="${k}" aria-selected="${S.otab === k}">${esc(l)}</button>`).join('')}</div>
-<div class="panel ${S.otab === 'thinking' ? 'thinking' : ''}" id="panel">${(({ prompt: outPrompt, thinking: outThinking, quality: outQuality, versions: outVersions, feedback: outFeedback })[S.otab] || outPrompt)(r, vs)}</div>`;
+${r.missingRequired.length ? `<span class="pill bad">Fill: ${esc(r.missingRequired.join(', '))}</span>` : ''}${r.openNotes ? `<button class="pill plain" style="cursor:pointer" data-act="otab" data-tab="reviewers">${r.openNotes} reviewer note${r.openNotes > 1 ? 's' : ''}</button>` : ''}${r.warnings.length ? `<button class="pill warn" style="cursor:pointer" data-act="otab" data-tab="quality">${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''} from past feedback</button>` : ''}</div>
+<div class="otabs" role="tablist">${[['prompt', 'Prompt'], ['thinking', 'Thinking'], ['quality', 'Quality ' + sc.total], ['reviewers', 'Reviewers' + (r.openNotes ? ' ' + r.openNotes : '')], ['versions', 'Versions' + (vs.length ? ' ' + vs.length : '')], ['feedback', 'Feedback' + (d.buildId && feedbackOf(d.buildId).length ? ' ' + feedbackOf(d.buildId).length : '')]].map(([k, l]) => `<button class="otab" role="tab" data-act="otab" data-tab="${k}" aria-selected="${S.otab === k}">${esc(l)}</button>`).join('')}</div>
+<div class="panel ${S.otab === 'thinking' ? 'thinking' : ''}" id="panel">${(({ prompt: outPrompt, thinking: outThinking, quality: outQuality, reviewers: outReviewers, versions: outVersions, feedback: outFeedback })[S.otab] || outPrompt)(r, vs)}</div>`;
     const ms = $('#mviewScore'); if (ms) ms.textContent = sc.total;
     const t = $('#bTitle'); if (t) t.textContent = d.inputs.title || d.inputs.topic || d.inputs.docname || d.inputs.dataset || d.inputs.piecetype || 'Untitled prompt';
   }
@@ -422,6 +429,65 @@ ${sc.vague.length ? `<li><span class="pill warn">Vague</span><b>Words that hide 
     while (i < n) out.push(`<span class="minus">${esc(A[i++])}</span>`);
     while (j < m) out.push(`<span class="plus">${esc(B[j++])}</span>`);
     return out.join('');
+  }
+
+  // ---------------------------------------------------------------- REVIEWER PANEL
+  function fieldFor(f) {
+    const t = S.draft.type; if (t === 'review') return 'prompt';
+    const keys = Engine.T[t].groups.flatMap(g => g[1]);
+    if (keys.includes(f)) return f;
+    if (['rules', 'pitfalls', 'privacy', 'design', 'storage', 'data', 'repo', 'offline', 'sync'].includes(f) && keys.includes('constraints')) return 'constraints';
+    if (['citations', 'sources', 'output', 'length'].includes(f) && keys.includes('structure')) return 'structure';
+    return keys.includes('extra') ? 'extra' : keys[keys.length - 1];
+  }
+  const avatar = (x, big) => `<span class="avatar${big ? ' big' : ''}" data-dom="${x.domain}" aria-hidden="true">${esc(Reviewers.initials(x))}</span>`;
+  function outReviewers(r) {
+    const pn = panelOpts();
+    const withNotes = r.notes.filter(o => o.f.some(f => !f.dismissed || S.showDismissed));
+    const quiet = r.notes.filter(o => !o.f.some(f => !f.dismissed));
+    const dismissed = r.notes.reduce((n, o) => n + o.f.filter(f => f.dismissed).length, 0);
+    const lbl = k => k === 'prompt' ? 'the prompt' : (Engine.F[k] ? Engine.F[k].label : k);
+    return `<div class="toolbar"><button class="btn primary" data-act="rv-copy">Copy panel review prompt</button><button class="btn" data-act="rv-panel">Change panel</button></div>
+<div class="panel-head"><div class="avatars">${r.panel.map(x => `<span class="who" title="${esc(x.name + ', ' + x.role)}">${avatar(x)}</span>`).join('')}</div>
+<p class="small muted">${r.panel.length} reviewers picked for this prompt from ${Reviewers.LIST.length}, by its words and kind. Each checks the prompt from their own field. <b>Copy panel review prompt</b> asks Claude to run the same panel with real AI.</p></div>
+${withNotes.length ? withNotes.map(({ x, f }) => `<section class="rv-card">
+<div class="rv-head">${avatar(x, true)}<div class="stack" style="gap:2px;min-width:0"><b>${esc(x.name)} · ${esc(x.role)}</b><span class="small muted">${esc(x.background)}</span></div></div>
+<ul class="rv-notes">${f.filter(n => !n.dismissed || S.showDismissed).map(n => `<li class="${n.dismissed ? 'is-dismissed' : ''}"><b>${esc(n.problem)}</b>
+<code class="rv-line">${esc(n.line)}</code>
+<div class="rv-acts"><span class="small muted">Adds to ${esc(lbl(fieldFor(n.field)))}</span>${n.dismissed ? `<button class="btn sm" data-act="rv-undismiss" data-key="${esc(n.key)}">Restore</button>` : `<button class="btn sm primary" data-act="rv-add" data-key="${esc(n.key)}">Add to prompt</button><button class="btn sm" data-act="rv-dismiss" data-key="${esc(n.key)}">Dismiss</button>`}</div></li>`).join('')}</ul></section>`).join('') : `<div class="empty"><p><b>No open notes.</b> The panel has nothing to add to this prompt.</p></div>`}
+${quiet.length ? `<p class="small muted rv-quiet">No concerns from ${quiet.map(o => esc(o.x.name + ' (' + o.x.role.toLowerCase() + ')')).join(', ')}.</p>` : ''}
+${dismissed ? `<p class="rv-quiet"><button class="btn ghost sm" data-act="rv-showdis">${S.showDismissed ? 'Hide' : 'Show'} ${dismissed} dismissed</button></p>` : ''}`;
+  }
+  function addNote(key) {
+    const [rid, i] = key.split(':'); const x = Reviewers.byId[rid]; if (!x) return;
+    const [, , line, field] = x.checks[+i];
+    const k = fieldFor(field);
+    const cur = String(S.draft.inputs[k] || '').trim();
+    if (cur.includes(line)) return toast('Already in the prompt');
+    S.draft.inputs[k] = cur ? cur + '\n' + line : line;
+    saveDraft(); rerender();
+    toast(`Added to ${k === 'prompt' ? 'the prompt' : Engine.F[k].label}`);
+  }
+  function dirOpen() {
+    S.dir = S.dir || { q: '', domain: '' };
+    const sh = modal(`<div class="row spread"><h2>Reviewer panel</h2><button class="btn" data-x="no">Done</button></div>
+<p class="small muted">${Reviewers.LIST.length} reviewers. The best 5–8 for each prompt are picked automatically; add or remove them here for this prompt, or star favourites to include them whenever they fit.</p>
+<div class="filters cols-2"><input type="search" id="dirQ" placeholder="Search by name, role or skill" aria-label="Search reviewers" value="${esc(S.dir.q)}"><select id="dirDom" aria-label="Field"><option value="">All fields</option>${Object.entries(Reviewers.DOMAINS).map(([k, v]) => `<option value="${k}"${S.dir.domain === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+<div id="dirList" class="dir-list"></div>`, { wide: true });
+    $('[data-x=no]', sh).onclick = () => { closeModal(); rerender(); };
+    paintDir();
+  }
+  function paintDir() {
+    const el = $('#dirList'); if (!el) return;
+    const q = S.dir.q.toLowerCase(), pn = panelOpts(), fav = settings().favReviewers || [];
+    const inPanel = new Set(compute().panel.map(x => x.id));
+    const text = draftText(S.draft);
+    const list = Reviewers.LIST.filter(x => (!S.dir.domain || x.domain === S.dir.domain) && (!q || [x.name, x.role, x.background, x.skills.join(' ')].join(' ').toLowerCase().includes(q)))
+      .map(x => ({ x, rel: Reviewers.relevance(x, text, S.draft.type) })).sort((a, b) => (inPanel.has(b.x.id) - inPanel.has(a.x.id)) || b.rel - a.rel || a.x.role.localeCompare(b.x.role));
+    $('#dirCount') && ($('#dirCount').textContent = list.length);
+    el.innerHTML = list.length ? list.map(({ x, rel }) => { const on = inPanel.has(x.id), isFav = fav.includes(x.id), ok = Reviewers.eligible(x, S.draft.type);
+      return `<div class="dir-item${on ? ' on' : ''}">${avatar(x, true)}<div class="stack" style="gap:2px;min-width:0"><b>${esc(x.name)} · ${esc(x.role)}</b><span class="small muted">${esc(Reviewers.DOMAINS[x.domain])}${on ? ' · in this panel' : rel >= 1 ? ' · relevant here' : ok ? '' : ' · not for this kind of prompt'}</span><span class="small">${esc(x.skills.join(' · '))}</span></div>
+<div class="acts"><button class="btn sm${isFav ? ' primary' : ''}" data-act="rv-fav" data-id="${x.id}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★ Favourite' : '☆ Favourite'}</button><button class="btn sm" data-act="rv-toggle" data-id="${x.id}"${ok ? '' : ' disabled'}>${on ? 'Remove' : 'Add'}</button></div></div>`; }).join('') : '<div class="empty"><p>No reviewer matches.</p></div>';
   }
 
   // ---------------------------------------------------------------- FEEDBACK AND LESSONS
@@ -630,6 +696,9 @@ ${setRow('<label for="setStyle">Prompt layout</label>', 'Plain headings match yo
 ${setRow('<label for="setUnclear">When something is unclear</label>', 'What the AI should do about gaps you leave.', sel('setUnclear', Object.entries(Engine.UNCLEAR), st.unclear))}
 ${setRow('<label for="setProfile">Default profile</label>', 'Filled into the PROFILE block of new Build and Extend prompts.', sel('setProfile', [['', 'None']].concat(profiles.map(p => [p.id, p.label])), st.profileId))}
 </section>
+<section class="card settings"><h2>Reviewer panel</h2>
+${setRow('Reviewers', `${Reviewers.LIST.length} built-in experts across ${Object.keys(Reviewers.DOMAINS).length} fields; ${n((st.favReviewers || []).length, 'favourite')}. Favourites join every panel they fit.`, '<button class="btn" data-act="rv-panel">Browse reviewers</button>')}
+</section>
 <section class="card settings"><h2>This device</h2>
 ${setRow('Install app', installed ? 'Installed: Prompt Builder opens in its own window.' : S.deferredInstall ? 'Opens in its own window and works offline.' : 'This browser gives no install button. In Chrome on Android use the menu, then Add to Home screen; in Edge use Apps, then Install this site as an app.',
     `<button class="btn" data-act="install"${S.deferredInstall ? '' : ' disabled'}>${installed ? 'Installed' : 'Install'}</button>`)}
@@ -730,7 +799,8 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
       else if (k === 'style') S.draft.options.style = t.value;
       else if (k === 'profileId') S.draft.profileId = t.value;
       saveDraft(); paintOut();
-    } else if (t.id === 'fbIssues') { S.fb.issues = t.value; }
+    } else if (t.id === 'dirQ') { S.dir.q = t.value; paintDir(); }
+    else if (t.id === 'fbIssues') { S.fb.issues = t.value; }
     else if (t.id === 'fbResponse') { S.fb.response = t.value; }
     else if (t.matches('[data-pf]') && t.type !== 'radio' && t.type !== 'checkbox' && t.tagName !== 'SELECT') {
       const p = S.fb.proposals[+t.closest('[data-prop]').dataset.prop]; const k = t.dataset.pf;
@@ -748,6 +818,7 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
     else if (t.id === 'setUnclear') { saveSettings({ unclear: t.value }); toast('Default saved'); }
     else if (t.id === 'setProfile') { saveSettings({ profileId: t.value }); toast('Default profile saved'); }
     else if (t.id === 'setTheme') { Prefs.set('theme', t.value); paintTheme(); }
+    else if (t.id === 'dirDom') { S.dir.domain = t.value; paintDir(); }
     else if (t.id === 'fbVersion') { S.fb.versionId = t.value; }
     else if (t.name === 'fbOutcome') { S.fb.outcome = t.value; paintOut(); }
     else if (t.matches('[data-pf]')) {
@@ -810,6 +881,19 @@ ${plan.revive.length ? `<label class="check"><input type="checkbox" id="rsRevive
       $('[data-x=no]', sh).onclick = closeModal;
       $('[data-x=yes]', sh).onclick = () => { const v = $('#memText').value.trim(); closeModal(); if (!v || v === x.value) return; const id = Model.memId(x.field, v); Store.remove('memory', x.id, { batch: true }); const cur = D().memory[id]; Store.put('memory', { id, field: x.field, value: v, uses: (x.uses || 1) + (cur && !cur.d ? cur.uses || 0 : 0), last: x.last, pinned: x.pinned, first: x.first }, { batch: true }); Store.commit(); rerender(); };
     },
+    'rv-add'(b) { addNote(b.dataset.key); },
+    'rv-dismiss'(b) { panelOpts().dismissed[b.dataset.key] = true; saveDraft(); paintOut(); },
+    'rv-undismiss'(b) { delete panelOpts().dismissed[b.dataset.key]; saveDraft(); paintOut(); },
+    'rv-showdis'() { S.showDismissed = !S.showDismissed; paintOut(); },
+    'rv-copy'() { const r = S.out; copy(Reviewers.panelPrompt(r.panel, r.prompt, Engine.T[S.draft.type].name), 'Panel review prompt'); },
+    'rv-panel'() { dirOpen(); },
+    'rv-toggle'(b) {
+      const id = b.dataset.id, pn = panelOpts(), on = S.out.panel.some(x => x.id === id);
+      pn.add = pn.add.filter(x => x !== id); pn.remove = pn.remove.filter(x => x !== id);
+      if (on) pn.remove.push(id); else pn.add.push(id);
+      saveDraft(); compute(); paintDir();
+    },
+    'rv-fav'(b) { const id = b.dataset.id; const f = settings().favReviewers || []; saveSettings({ favReviewers: f.includes(id) ? f.filter(x => x !== id) : f.concat([id]) }); compute(); paintDir(); },
     'fb-analyse'() { analyseFeedback(); },
     'fb-save'() { saveFeedback(); },
     'fb-del'(b) { const f = D().feedback[b.dataset.id]; confirmBox('Delete this feedback?', 'Lessons made from it stay in Lessons learned.', 'Delete', () => { Store.remove('feedback', f.id); rerender(); }, true); },

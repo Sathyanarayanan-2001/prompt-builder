@@ -454,6 +454,54 @@ test('every button works: audit of all actions', async () => {
   await ctx.close();
 });
 
+test('reviewer panel: notes, add to prompt, dismiss, change panel, favourites, panel prompt', async () => {
+  const { ctx, p } = await page({ permissions: ['clipboard-read', 'clipboard-write'] });
+  await p.goto(URL0 + '#build');
+  await p.fill('#f-title', 'Expense ledger'); await p.fill('#f-goal', 'A daily expense tracker for my HDFC bank accounts with monthly budget limits.');
+  await p.waitForTimeout(250);
+  await p.click('[data-tab=reviewers]');
+  const panel = await p.evaluate(() => PB.S.out.panel.map(x => x.id));
+  assert.ok(panel.length >= 5 && panel.length <= 8 && panel.includes('ca'), panel.join());
+  // the accountant's reconciliation note: add it, the line lands in the field and the note goes away
+  const card = p.locator('.rv-card', { hasText: 'Chartered accountant' });
+  const li = card.locator('li', { hasText: 'No reconciliation' });
+  const line = await li.locator('.rv-line').textContent();
+  const before = await p.evaluate(() => PB.S.out.openNotes);
+  await li.locator('[data-act=rv-add]').click(); await p.waitForTimeout(150);
+  assert.match(await p.inputValue('#f-rules'), new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 1);
+  assert.match(await p.locator('#toast').textContent(), /Added to Exact rules/);
+  // dismiss and restore
+  await p.click('[data-tab=reviewers]');
+  const firstKey = await p.locator('[data-act=rv-dismiss]').first().getAttribute('data-key');
+  await p.locator('[data-act=rv-dismiss]').first().click();
+  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 2);
+  await p.click('[data-act=rv-showdis]'); await p.click(`[data-act=rv-undismiss][data-key="${firstKey}"]`);
+  assert.equal(await p.evaluate(() => PB.S.out.openNotes), before - 1);
+  // panel prompt copies the panel and the prompt
+  await p.click('[data-act=rv-copy]');
+  const clip = await p.evaluate(() => navigator.clipboard.readText());
+  assert.match(clip, /^You are a review panel of \d experts/); assert.match(clip, /Meera, chartered accountant/); assert.match(clip, /<<<PROMPT\nROLE AND WORKING RULES/);
+  // change panel: add the grid code engineer, remove the accountant, star a favourite
+  await p.click('[data-act=rv-panel]');
+  await p.fill('#dirQ', 'grid code');
+  await p.locator('.dir-item', { hasText: 'Grid code compliance engineer' }).locator('[data-act=rv-toggle]').click();
+  await p.fill('#dirQ', 'chartered');
+  await p.locator('.dir-item', { hasText: 'Chartered accountant' }).locator('[data-act=rv-toggle]').click();
+  await p.fill('#dirQ', ''); await p.selectOption('#dirDom', 'software');
+  await p.locator('.dir-item', { hasText: 'Security engineer' }).locator('[data-act=rv-fav]').click();
+  assert.equal(await p.locator('.dir-item', { hasText: 'Security engineer' }).locator('[data-act=rv-fav]').getAttribute('aria-pressed'), 'true');
+  await p.click('.modal [data-x=no]');
+  const p2 = await p.evaluate(() => PB.S.out.panel.map(x => x.id));
+  assert.ok(p2.includes('gc') && p2.includes('sec') && !p2.includes('ca'), p2.join());
+  // panel choices are not prompt changes, and favourites apply to new prompts
+  await p.click('[data-act=new]'); if (await p.locator('.modal').count()) await p.click('[data-x=yes]');
+  await p.fill('#f-title', 'Login page'); await p.fill('#f-goal', 'A web page with a login form.'); await p.waitForTimeout(200);
+  assert.ok((await p.evaluate(() => PB.S.out.panel.map(x => x.id))).includes('sec'));
+  await p.goto(URL0 + '#setup'); assert.match(await p.locator('.set-row', { hasText: 'Reviewers' }).textContent(), /1 favourite/);
+  await ctx.close();
+});
+
 test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch targets', async () => {
   const audit = async p => p.evaluate(() => {
     const out = { misaligned: [], unlabelled: [], lowContrast: [] };
@@ -498,7 +546,7 @@ test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch 
       const { ctx, p } = await page({ viewport: vp, ...extra });
       await p.click('[data-act=sample-load]');
       await p.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
-      const views = [['start'], ['library'], ['inputs'], ['setup'], ['build', 'prompt'], ['build', 'quality'], ['build', 'feedback']];
+      const views = [['start'], ['library'], ['inputs'], ['setup'], ['build', 'prompt'], ['build', 'quality'], ['build', 'reviewers'], ['build', 'feedback']];
       for (const [r, tab] of views) {
         await p.goto(URL0 + '#' + r); await p.waitForTimeout(120);
         await p.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
@@ -507,6 +555,7 @@ test('layout rules: aligned controls, labelled inputs, AA contrast, 44 px touch 
           if (tab === 'feedback') { await p.goto(URL0 + '#library'); await p.locator('[data-act=open]').first().click(); if (await p.locator('.mview').isVisible()) await p.click('[data-act=mview][data-v=output]'); }
           await p.click(`[data-tab=${tab}]`); await p.waitForTimeout(80);
         }
+        if (tab === 'reviewers') { await p.click('[data-act=rv-panel]'); await p.waitForTimeout(80); const d = await audit(p); assert.deepEqual([d.misaligned, d.unlabelled], [[], []], 'reviewer directory at ' + vp.width); await p.click('.modal [data-x=no]'); }
         const a = await audit(p);
         const where = `${r}${tab ? '/' + tab : ''} at ${vp.width}px ${theme}`;
         assert.deepEqual(a.misaligned, [], 'misaligned controls on ' + where);

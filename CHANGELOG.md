@@ -2,6 +2,14 @@
 
 All notable changes are listed here, following [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.0] - 2026-11-04
+
+### Added
+- Reviewer panel: 102 built-in experts in 12 fields (software, data and AI, finance, wind energy and power, writing, training, design, research, management, legal, health, critical thinking), each with a background, skills and checks.
+- The best 5 to 8 are picked for each prompt from its words and kind; add or remove reviewers per prompt, and star favourites to include them whenever they fit.
+- Reviewers tab: each note names the problem and a ready line; Add to prompt puts it in the right field, Dismiss hides it.
+- Copy panel review prompt: asks Claude to run the same panel with real AI and return an improved prompt.
+
 ## [1.2.0] - 2026-11-03
 
 ### Changed

@@ -231,3 +231,55 @@ test('restore plan: adds, updates, keeps newer local, ignores backup deletions, 
   assert.deepEqual(withRevive.a, { id: 'a', u: 101, t: 'A' }); // fresh u beats the tombstone on other devices too
   assert.equal(L.builds.c, undefined, 'local data is not mutated');
 });
+
+// ---------- reviewer panel
+const Reviewers = require('../src/reviewers.js');
+test('about 100 reviewers in 12 fields, unique ids, each with background, skills and checks', () => {
+  assert.ok(Reviewers.LIST.length >= 100 && Reviewers.LIST.length <= 110, String(Reviewers.LIST.length));
+  assert.equal(new Set(Reviewers.LIST.map(x => x.id)).size, Reviewers.LIST.length);
+  assert.equal(Object.keys(Reviewers.DOMAINS).length, 12);
+  for (const x of Reviewers.LIST) {
+    assert.ok(Reviewers.DOMAINS[x.domain], x.id);
+    assert.ok(x.background.length > 10 && x.skills.length >= 2 && x.checks.length >= 1, x.id);
+  }
+});
+test('every suggested line clears its own note and targets a real field', () => {
+  for (const x of Reviewers.LIST) x.checks.forEach(([need, problem, line, field], i) => {
+    assert.ok(need.test(line), `${x.id}#${i}: "${line}" does not satisfy its check`);
+    assert.ok(Engine.F[field], `${x.id}#${i}: unknown field ${field}`);
+    assert.ok(problem.length > 5);
+  });
+});
+test('panel picks the right experts for the words used (hand-picked expectations)', () => {
+  const ids = (t, type) => Reviewers.pick(t, type).map(x => x.id);
+  const exp = ids('A daily expense tracker for my HDFC bank accounts with budget limits', 'app');
+  assert.ok(exp.includes('ca') && exp.includes('bank') && exp.includes('bud'), exp.join());
+  const gc = ids('CEA grid code fault ride-through and reactive power at the point of interconnection', 'research');
+  assert.ok(gc.includes('gc'), gc.join());
+  assert.ok(!gc.includes('fe') && !gc.includes('py'), 'build-only reviewers stay out of research prompts');
+  const pq = ids('training handout on power quality harmonics for wind turbine technicians', 'content');
+  assert.ok(pq.includes('pq') && pq.includes('ct'), pq.join());
+  for (const t of ['ideas for a team outing', 'x', exp.join(' ')]) { const n = ids(t, 'brainstorm').length; assert.ok(n >= 5 && n <= 8, `${t}: ${n}`); }
+});
+test('panel honours added, removed and favourite reviewers', () => {
+  const t = 'A daily expense tracker for my bank accounts';
+  const p = Reviewers.pick(t, 'app', { add: ['pq'], remove: ['ca'], favourites: ['sec', 'gc'] }).map(x => x.id);
+  assert.ok(p.includes('pq') && p.includes('sec') && p.includes('gc') && !p.includes('ca'), p.join());
+  const r = Reviewers.pick(t, 'research', { favourites: ['fe'] }).map(x => x.id);
+  assert.ok(!r.includes('fe'), 'a favourite joins only prompts it fits');
+});
+test('findings: missing items are raised once, present items are not, dismissed are flagged', () => {
+  const ca = Reviewers.byId.ca;
+  const all = Reviewers.findings(ca, 'Track expenses.');
+  assert.deepEqual(all.map(f => f.key), ['ca:0', 'ca:1', 'ca:2']);
+  const some = Reviewers.findings(ca, 'Hold money as whole paise. Reconcile monthly.', { 'ca:2': true });
+  assert.deepEqual(some.map(f => [f.key, f.dismissed]), [['ca:2', true]]);
+});
+test('panel review prompt lists the experts and wraps the prompt', () => {
+  const panel = ['ca', 'gc'].map(id => Reviewers.byId[id]);
+  const t = Reviewers.panelPrompt(panel, 'Build X.', 'Build a tool or app');
+  assert.match(t, /^You are a review panel of 2 experts\./);
+  assert.match(t, /1\. Meera, chartered accountant\./); assert.match(t, /2\. Karthik, grid code compliance engineer\./);
+  assert.match(t, /<<<PROMPT\nBuild X\.\nPROMPT>>>$/);
+  assert.match(t, /\[ASSUMED\]/);
+});
